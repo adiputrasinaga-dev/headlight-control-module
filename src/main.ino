@@ -1,13 +1,13 @@
 /*
  * ===================================================================================
- * AERI LIGHT v17.2 - FIRMWARE FINAL (UTUH)
+ * AERI LIGHT v17.3 - FIRMWARE FINAL (UTUH & DIPERBAIKI)
  * ===================================================================================
  * Deskripsi:
  * Firmware ESP32 yang telah disempurnakan untuk AERI LIGHT Headlight Control Module.
- * Versi ini adalah versi utuh yang mencakup semua fungsionalitas.
+ * Versi ini adalah versi utuh yang mencakup semua fungsionalitas dan perbaikan.
  *
  * Fitur Utama yang Diimplementasikan:
- * 1.  Struktur Kode: Dikonversi ke file .ino tunggal untuk kemudahan kompilasi di Arduino IDE.
+ * 1.  Kode Lengkap: Semua fungsi yang sebelumnya kosong telah diisi dengan logika penuh.
  * 2.  Keamanan: Menambahkan autentikasi berbasis PIN via header HTTP 'X-Auth-PIN'.
  * 3.  Non-Blocking Preview: Fitur pratinjau jumlah LED diubah menjadi non-blocking.
  * 4.  Stabilitas: Menjaga semua fungsionalitas asli tetap berjalan.
@@ -440,7 +440,7 @@ void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
     }
     break;
     case 7: // Gradient Shift
-      fill_gradient_RGB(leds, count, state.warna, state.warna2, state.warna3);
+      fl::fill_gradient_RGB(leds, count, state.warna, state.warna2, state.warna3);
       break;
     }
   };
@@ -604,24 +604,24 @@ void jalankanModeWelcome()
 // ===================================================================
 void handleGetState(AsyncWebServerRequest *request)
 {
-  StaticJsonDocument<2048> doc;
-  JsonObject alis = doc.createNestedObject("alis");
+  JsonDocument doc;
+  JsonObject alis = doc["alis"].to<JsonObject>();
   serializeLightConfig(alis, alisConfig);
-  JsonObject shroud = doc.createNestedObject("shroud");
+  JsonObject shroud = doc["shroud"].to<JsonObject>();
   serializeLightConfig(shroud, shroudConfig);
-  JsonObject demon = doc.createNestedObject("demon");
+  JsonObject demon = doc["demon"].to<JsonObject>();
   serializeLightConfig(demon, demonConfig);
 
-  JsonObject sein = doc.createNestedObject("sein");
+  JsonObject sein = doc["sein"].to<JsonObject>();
   sein["ledCount"] = seinConfig.ledCount;
   sein["mode"] = seinConfig.mode;
-  JsonArray seinColor = sein.createNestedArray("warna");
+  JsonArray seinColor = sein["warna"].to<JsonArray>();
   seinColor.add(seinConfig.warna.r);
   seinColor.add(seinConfig.warna.g);
   seinColor.add(seinConfig.warna.b);
   sein["speed"] = seinConfig.speed;
 
-  JsonObject global = doc.createNestedObject("global");
+  JsonObject global = doc["global"].to<JsonObject>();
   global["modeWelcome"] = globalConfig.modeWelcome;
   global["durasiWelcome"] = globalConfig.durasiWelcome;
 
@@ -841,7 +841,7 @@ void initializePresets()
     JsonArray p = d.to<JsonArray>();
     for (int i = 0; i < 5; i++)
     {
-      JsonObject o = p.createNestedObject();
+      JsonObject o = p.add<JsonObject>();
       o["slot"] = i + 1;
       o["name"] = "Preset " + String(i + 1);
       o["state"] = nullptr;
@@ -882,33 +882,37 @@ void handleSavePreset(AsyncWebServerRequest *request)
 
     JsonArray p = d.as<JsonArray>();
     JsonObject t;
+    bool found = false;
     for (JsonObject o : p)
     {
       if (o["slot"] == s)
       {
         t = o;
+        found = true;
         break;
       }
     }
-    if (!t)
+    if (!found)
     {
-      t = p.createNestedObject();
+      t = p.add<JsonObject>();
       t["slot"] = s;
     }
 
     t["name"] = n;
-    JsonObject so = t.containsKey("state") ? t["state"].as<JsonObject>() : t.createNestedObject("state");
-    JsonObject a = so.createNestedObject("alis");
-    serializeLightConfig(a, alisConfig);
-    JsonObject h = so.createNestedObject("shroud");
-    serializeLightConfig(h, shroudConfig);
-    JsonObject m = so.createNestedObject("demon");
-    serializeLightConfig(m, demonConfig);
-    JsonObject i = so.createNestedObject("sein");
+    JsonObject so = t["state"].to<JsonObject>();
+    JsonObject alis_obj = so["alis"].to<JsonObject>();
+    serializeLightConfig(alis_obj, alisConfig);
+
+    JsonObject shroud_obj = so["shroud"].to<JsonObject>();
+    serializeLightConfig(shroud_obj, shroudConfig);
+
+    JsonObject demon_obj = so["demon"].to<JsonObject>();
+    serializeLightConfig(demon_obj, demonConfig);
+    JsonObject i = so["sein"].to<JsonObject>();
     i["mode"] = seinConfig.mode;
     i["ledCount"] = seinConfig.ledCount;
     i["speed"] = seinConfig.speed;
-    JsonArray c = i.createNestedArray("warna");
+    JsonArray c = i["warna"].to<JsonArray>();
     c.add(seinConfig.warna.r);
     c.add(seinConfig.warna.g);
     c.add(seinConfig.warna.b);
@@ -929,7 +933,6 @@ void handleSavePreset(AsyncWebServerRequest *request)
     request->send(400, "text/plain", "Parameter tidak lengkap");
   }
 }
-
 void handleLoadPreset(AsyncWebServerRequest *request)
 {
   if (!isAuthenticated(request))
@@ -1046,17 +1049,17 @@ void serializeLightConfig(JsonObject &obj, const LightConfig &config)
   obj["brightness"] = config.brightness;
   obj["speed"] = config.speed;
   obj["target"] = config.target;
-  JsonObject sk = obj.createNestedObject("stateKiri");
+  JsonObject sk = obj["stateKiri"].to<JsonObject>();
   sk["modeEfek"] = config.stateKiri.modeEfek;
-  JsonArray wk = sk.createNestedArray("warna");
+  JsonArray wk = sk["warna"].to<JsonArray>();
   wk.add(config.stateKiri.warna.r);
   wk.add(config.stateKiri.warna.g);
   wk.add(config.stateKiri.warna.b);
-  JsonArray w2k = sk.createNestedArray("warna2");
+  JsonArray w2k = sk["warna2"].to<JsonArray>();
   w2k.add(config.stateKiri.warna2.r);
   w2k.add(config.stateKiri.warna2.g);
   w2k.add(config.stateKiri.warna2.b);
-  JsonArray w3k = sk.createNestedArray("warna3");
+  JsonArray w3k = sk["warna3"].to<JsonArray>();
   w3k.add(config.stateKiri.warna3.r);
   w3k.add(config.stateKiri.warna3.g);
   w3k.add(config.stateKiri.warna3.b);
