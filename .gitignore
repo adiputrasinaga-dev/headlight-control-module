@@ -1,0 +1,13 @@
+# File konfigurasi spesifik untuk VS Code
+.vscode/
+
+# Folder build dan dependensi PlatformIO
+.pio/
+
+# File sistem operasi
+.DS_Store
+Thumbs.db
+
+# File lain yang mungkin dibuat oleh editor atau tools
+*.bak
+*.tmp
