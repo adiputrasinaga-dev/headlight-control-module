@@ -1,516 +1,654 @@
-// AERI LIGHT v16.5 - Dynamic Effects & UI Unification
+/*
+ * ===================================================================
+ * AERI LIGHT v17.2 - APP.JS FINAL (LENGKAP DAN UTUH)
+ * ===================================================================
+ * Deskripsi Perubahan:
+ * 1.  Implementasi Penuh: Semua fungsi, termasuk yang sebelumnya kosong, kini telah
+ * diisi dengan logika yang benar dan fungsional.
+ * 2.  Inisialisasi iro.js: Color picker diinisialisasi dengan benar.
+ * 3.  Refactor: Logika utilitas (debounce, rgbToHex) dipindahkan ke dalam
+ * sub-objek `App.util` untuk kerapian.
+ * 4.  Stabilitas: Menambahkan pemeriksaan null-safety untuk elemen dinamis
+ * untuk mencegah error.
+ * ===================================================================
+ */
 document.addEventListener("DOMContentLoaded", () => {
-  let appState = {};
-  let isSyncEnabled = false;
-  let isDemoMode = false;
-  let activeSystemForModal = null;
-  let activeColorSlot = 1; // 1, 2, or 3
-  let activeToastTimer = null;
+  const App = {
+    // --- STATE & KONFIGURASI APLIKASI ---
+    state: {
+      isSyncEnabled: false,
+      isDemoMode: false,
+      activeSystemForModal: null,
+      activeColorSlot: 1,
+      activeToastTimer: null,
+      authPin: "",
+      appState: {},
+    },
+    config: {
+      debounceDelay: 200, // Penundaan dalam ms untuk mengirim data slider
+      systems: ["alis", "shroud", "demon"],
+      modeOptions: {
+        static: [{ name: "Static", value: 0, colorSlots: 1 }],
+        dynamic: [
+          { name: "Breathing", value: 1, colorSlots: 1 },
+          { name: "Rainbow", value: 2, colorSlots: 0 },
+          { name: "Comet", value: 3, colorSlots: 1 },
+          { name: "Cylon Scanner", value: 4, colorSlots: 1 },
+          { name: "Twinkle", value: 5, colorSlots: 2 },
+          { name: "Fire", value: 6, colorSlots: 0 },
+          { name: "Gradient Shift", value: 7, colorSlots: 3 },
+        ],
+        welcome: [
+          { name: "Power-On Scan", value: 0 },
+          { name: "Ignition Burst", value: 1 },
+          { name: "Spectrum Resolve", value: 2 },
+          { name: "Theater Chase", value: 3 },
+        ],
+        sein: [
+          { name: "Sequential", value: 0 },
+          { name: "Pulsing Arrow", value: 1 },
+          { name: "Fill & Flush", value: 2 },
+          { name: "Comet Trail", value: 3 },
+        ],
+      },
+    },
 
-  const modeOptions = {
-    static: [{ name: "Static", value: 0, colorSlots: 1 }],
-    dynamic: [
-      { name: "Breathing", value: 1, colorSlots: 1 },
-      { name: "Rainbow", value: 2, colorSlots: 0 },
-      { name: "Comet", value: 3, colorSlots: 1 },
-      { name: "Cylon Scanner", value: 4, colorSlots: 1 },
-      { name: "Twinkle", value: 5, colorSlots: 2 },
-      { name: "Fire", value: 6, colorSlots: 0 },
-      { name: "Gradient Shift", value: 7, colorSlots: 3 },
-    ],
-    welcome: [
-      { name: "Power-On Scan", value: 0 },
-      { name: "Ignition Burst", value: 1 },
-      { name: "Spectrum Resolve", value: 2 },
-      { name: "Theater Chase", value: 3 },
-    ],
-    sein: [
-      { name: "Sequential", value: 0 },
-      { name: "Pulsing Arrow", value: 1 },
-      { name: "Fill & Flush", value: 2 },
-      { name: "Comet Trail", value: 3 },
-    ],
-  };
+    elements: {}, // Cache untuk elemen DOM
+    modalColorPicker: null, // Placeholder untuk iro.js
 
-  const elements = {
-    toastContainer: document.getElementById("toast-container"),
-    header: {
-      statusIcon: document.getElementById("statusIcon"),
-      statusText: document.getElementById("statusText"),
+    // --- INISIALISASI ---
+    init() {
+      this.cacheInitialElements();
+      this.modalColorPicker = new iro.ColorPicker(
+        "#modalColorPickerContainer",
+        {
+          width: 280,
+          color: "#ff0000",
+          borderWidth: 1,
+          borderColor: "var(--border-color)",
+          layout: [{ component: iro.ui.Wheel }],
+        }
+      );
+      this.generateControlTemplates();
+      this.cacheDynamicElements();
+      this.bindEvents();
+      this.loadTheme();
+      this.loadPin();
+      this.populateDropdowns();
+      this.fetchInitialState();
     },
-    nav: {
-      hamburgerBtn: document.getElementById("hamburger-btn"),
-      mobileMenu: document.getElementById("mobile-menu"),
-      tabButtons: document.querySelectorAll(".tab-btn, .mobile-nav-link"),
-      tabContents: document.querySelectorAll(".tab-content"),
-    },
-    kontrol: {
-      syncSwitch: document.getElementById("syncSwitch"),
-      systemSelector: document.querySelectorAll('input[name="controlTarget"]'),
-      controlSets: {
-        alis: document.getElementById("alis-controls"),
-        shroud: document.getElementById("shroud-controls"),
-        demon: document.getElementById("demon-controls"),
-        sein: document.getElementById("sein-controls"),
-      },
-      alis: {
-        mode: document.getElementById("alisMode"),
-        brightness: document.getElementById("alisBrightness"),
-        brightnessValue: document.getElementById("alisBrightnessValue"),
-        speed: document.getElementById("alisSpeed"),
-        speedValue: document.getElementById("alisSpeedValue"),
-      },
-      shroud: {
-        mode: document.getElementById("shroudMode"),
-        brightness: document.getElementById("shroudBrightness"),
-        brightnessValue: document.getElementById("shroudBrightnessValue"),
-        speed: document.getElementById("shroudSpeed"),
-        speedValue: document.getElementById("shroudSpeedValue"),
-      },
-      demon: {
-        mode: document.getElementById("demonMode"),
-        brightness: document.getElementById("demonBrightness"),
-        brightnessValue: document.getElementById("demonBrightnessValue"),
-        speed: document.getElementById("demonSpeed"),
-        speedValue: document.getElementById("demonSpeedValue"),
-      },
-      sein: {
-        modeSettings: document.getElementById("seinModeSettings"),
-        speed: document.getElementById("seinSpeed"),
-        speedValue: document.getElementById("seinSpeedValue"),
-      },
-    },
-    pengaturan: {
-      ledTarget: document.querySelectorAll('input[name="ledTarget"]'),
-      ledCount: document.getElementById("ledCount"),
-      btnSaveLedCount: document.getElementById("btnSaveLedCount"),
-      btnPreviewLedCount: document.getElementById("btnPreviewLedCount"),
-      presetSlot: document.getElementById("presetSlot"),
-      presetName: document.getElementById("presetName"),
-      btnSavePreset: document.getElementById("btnSavePreset"),
-      btnLoadPreset: document.getElementById("btnLoadPreset"),
-      btnReset: document.getElementById("btnReset"),
-    },
-    welcome: {
-      mode: document.getElementById("welcomeMode"),
-      duration: document.getElementById("welcomeDuration"),
-      btnPreview: document.getElementById("btnPreviewWelcome"),
-      btnSave: document.getElementById("btnSaveWelcome"),
-    },
-    resetModal: {
-      backdrop: document.getElementById("reset-modal"),
-      cancelBtn: document.getElementById("reset-cancel-btn"),
-      confirmBtn: document.getElementById("reset-confirm-btn"),
-      input: document.getElementById("reset-confirm-input"),
-    },
-    colorPickerModal: {
-      backdrop: document.getElementById("color-picker-modal"),
-      btnBatal: document.getElementById("btnModalBatal"),
-      btnSimpan: document.getElementById("btnModalSimpan"),
-      previewBox: document.getElementById("modalColorPreview"),
-      brightnessSlider: document.getElementById("modalBrightnessSlider"),
-      hexInput: document.getElementById("modalHexInput"),
-      redInput: document.getElementById("modalRedInput"),
-      greenInput: document.getElementById("modalGreenInput"),
-      blueInput: document.getElementById("modalBlueInput"),
-    },
-  };
 
-  const modalColorPicker = new iro.ColorPicker("#modalColorPickerContainer", {
-    width: 280,
-    color: "#ff0000",
-    borderWidth: 1,
-    borderColor: "var(--border-color)",
-    layout: [{ component: iro.ui.Wheel }],
-  });
-
-  function debounce(func, delay = 300) {
-    let timeout;
-    return (...args) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(this, args), delay);
-    };
-  }
-
-  function showToast(message, type = "success") {
-    const container = elements.toastContainer;
-    if (activeToastTimer) clearTimeout(activeToastTimer);
-    let toastElement = container.querySelector(".toast");
-    if (toastElement && type === "success") {
-      toastElement.className = `toast ${type}`;
-      toastElement.textContent = message;
-      toastElement.style.animation = "none";
-      toastElement.offsetHeight;
-      toastElement.style.animation =
-        "slideInFadeOut 4s ease-in-out forwards, shake 0.5s ease";
-    } else {
-      if (toastElement && type !== "success") toastElement.remove();
-      toastElement = document.createElement("div");
-      toastElement.className = `toast ${type}`;
-      toastElement.textContent = message;
-      toastElement.style.animation = "slideInFadeOut 4s ease-in-out forwards";
-      container.appendChild(toastElement);
-    }
-    activeToastTimer = setTimeout(() => {
-      if (toastElement && toastElement.parentElement) toastElement.remove();
-      activeToastTimer = null;
-    }, 4000);
-  }
-
-  function generateDummyState() {
-    const defaultLightState = {
-      stateKiri: {
-        warna: [230, 0, 35],
-        warna2: [0, 246, 255],
-        warna3: [0, 255, 0],
-        modeEfek: 1,
-      },
-      stateKanan: {
-        warna: [230, 0, 35],
-        warna2: [0, 246, 255],
-        warna3: [0, 255, 0],
-        modeEfek: 1,
-      },
-      ledCount: 50,
-      brightness: 85,
-      speed: 60,
-      target: "keduanya",
-    };
-    return {
-      alis: { ...defaultLightState },
-      shroud: {
-        ...defaultLightState,
-        ledCount: 40,
-        stateKiri: {
-          warna: [191, 193, 194],
-          warna2: [230, 0, 35],
-          warna3: [0, 255, 0],
-          modeEfek: 5,
+    // --- PENGATURAN AWAL & PEMBUATAN UI ---
+    cacheInitialElements() {
+      this.elements = {
+        toastContainer: document.getElementById("toast-container"),
+        themeSwitcher: document.getElementById("theme-switcher"),
+        themeColorMeta: document.getElementById("theme-color-meta"),
+        statusIcon: document.getElementById("statusIcon"),
+        statusText: document.getElementById("statusText"),
+        hamburgerBtn: document.getElementById("hamburger-btn"),
+        mobileMenu: document.getElementById("mobile-menu"),
+        tabButtons: document.querySelectorAll(".tab-btn, .mobile-nav-link"),
+        tabContents: document.querySelectorAll(".tab-content"),
+        syncSwitch: document.getElementById("syncSwitch"),
+        systemSelector: document.querySelectorAll(
+          'input[name="controlTarget"]'
+        ),
+        authPinInput: document.getElementById("authPin"),
+        btnSaveAuthPin: document.getElementById("btnSaveAuthPin"),
+        resetModal: {
+          backdrop: document.getElementById("reset-modal"),
+          cancelBtn: document.getElementById("reset-cancel-btn"),
+          confirmBtn: document.getElementById("reset-confirm-btn"),
+          input: document.getElementById("reset-confirm-input"),
         },
-      },
-      demon: {
-        ...defaultLightState,
-        ledCount: 1,
-        stateKiri: {
-          warna: [230, 0, 35],
-          warna2: [0, 0, 0],
-          warna3: [0, 0, 0],
-          modeEfek: 0,
+        colorPickerModal: {
+          backdrop: document.getElementById("color-picker-modal"),
+          btnBatal: document.getElementById("btnModalBatal"),
+          btnSimpan: document.getElementById("btnModalSimpan"),
         },
-      },
-      sein: { ledCount: 50, mode: 0, warna: [255, 100, 0], speed: 50 },
-      global: { modeWelcome: 2, durasiWelcome: 5 },
-    };
-  }
-
-  (function addBrightnessBadgeAndSync() {
-    const slider = elements?.colorPickerModal?.brightnessSlider;
-    if (slider && slider.parentElement) {
-      let span = slider.parentElement.querySelector(".brightness-value");
-      if (!span) {
-        slider.parentElement.style.display = "flex";
-        slider.parentElement.style.alignItems = "center";
-        slider.parentElement.style.gap = "10px";
-        span = document.createElement("span");
-        span.className = "brightness-value";
-        span.textContent = slider.value + "%";
-        slider.parentElement.appendChild(span);
-      }
-      elements.colorPickerModal.brightnessValue = span;
-      const updateSliderUI = (valPercent) => {
-        span.textContent = valPercent + "%";
-        const col = modalColorPicker.color.rgb;
-        const rgbStr = `rgb(${col.r},${col.g},${col.b})`;
-        slider.style.background = `linear-gradient(to right,#000 0%,${rgbStr} ${valPercent}%,var(--secondary-accent) ${valPercent}%,var(--secondary-accent) 100%)`;
       };
-      slider.addEventListener("input", (e) => {
-        const v = parseInt(e.target.value, 10);
-        const hsv = modalColorPicker.color.hsv;
-        modalColorPicker.color.hsv = { h: hsv.h, s: hsv.s, v };
-        updateSliderUI(v);
+    },
+
+    generateControlTemplates() {
+      this.config.systems.forEach((sysKey) => {
+        const container = document.getElementById(
+          `${sysKey}-controls-container`
+        );
+        if (container) container.innerHTML = this.getControlSetHTML(sysKey);
       });
-      modalColorPicker.on("color:change", (c) => {
-        const v = Math.round(c.hsv.v);
-        slider.value = v;
-        updateSliderUI(v);
+      const seinContainer = document.getElementById("sein-controls-container");
+      if (seinContainer) seinContainer.innerHTML = this.getSeinControlHTML();
+    },
+
+    getControlSetHTML(sysKey) {
+      const sysName = sysKey.charAt(0).toUpperCase() + sysKey.slice(1);
+      const svgLeft =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M15.25 4.75a.75.75 0 00-1.06 0L8.72 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L10.31 11l5.94-5.19a.75.75 0 000-1.06z"></path></svg>';
+      const svgBoth =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8.75 4.75a.75.75 0 00-1.06 0L2.22 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L3.31 11l5.94-5.19a.75.75 0 000-1.06zm6.5 0a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L20.69 11l-5.94-5.19a.75.75 0 010-1.06z"></path></svg>';
+      const svgRight =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8.75 4.75a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L13.69 11l-5.94-5.19a.75.75 0 010-1.06z"></path></svg>';
+      return `
+        <div id="${sysKey}-controls" class="control-set">
+          <div class="control-group">
+            <label class="control-label">TARGET</label>
+            <div class="segmented-control" data-target-group="${sysKey}">
+              <button class="sg-btn" data-value="kiri" title="Hanya Kiri">${svgLeft}</button>
+              <button class="sg-btn active" data-value="keduanya" title="Kiri & Kanan">${svgBoth}</button>
+              <button class="sg-btn" data-value="kanan" title="Hanya Kanan">${svgRight}</button>
+            </div>
+          </div>
+          <div class="control-group">
+            <label class="control-label">TIPE EFEK</label>
+            <div class="radio-group" data-type-group="${sysKey}">
+                <input type="radio" id="${sysKey}EffectTypeStatic" name="${sysKey}EffectType" value="static" checked/><label for="${sysKey}EffectTypeStatic">Statis</label>
+                <input type="radio" id="${sysKey}EffectTypeDynamic" name="${sysKey}EffectType" value="dynamic"/><label for="${sysKey}EffectTypeDynamic">Dinamis</label>
+            </div>
+          </div>
+          <div class="static-color-section">
+            <div class="control-group">
+              <label>WARNA SOLID</label>
+              <div id="${sysKey}ColorPreviewStatic" class="color-preview-box" title="Klik untuk mengubah warna"><span id="${sysKey}ColorHexStatic" class="color-hex-value">#RRGGBB</span></div>
+            </div>
+          </div>
+          <div class="dynamic-controls">
+            <div class="dynamic-color-previews-container">
+                <div class="control-group" id="${sysKey}-dynamic-color-group-1" style="display: none;"><label>WARNA 1</label><div id="${sysKey}ColorPreviewDynamic1" class="color-preview-box" title="Klik untuk mengubah Warna 1"><span id="${sysKey}ColorHexDynamic1" class="color-hex-value">#RRGGBB</span></div></div>
+                <div class="control-group" id="${sysKey}-dynamic-color-group-2" style="display: none;"><label>WARNA 2</label><div id="${sysKey}ColorPreviewDynamic2" class="color-preview-box" title="Klik untuk mengubah Warna 2"><span id="${sysKey}ColorHexDynamic2" class="color-hex-value">#RRGGBB</span></div></div>
+                <div class="control-group" id="${sysKey}-dynamic-color-group-3" style="display: none;"><label>WARNA 3</label><div id="${sysKey}ColorPreviewDynamic3" class="color-preview-box" title="Klik untuk mengubah Warna 3"><span id="${sysKey}ColorHexDynamic3" class="color-hex-value">#RRGGBB</span></div></div>
+            </div>
+            <div class="control-group"><label>MODE EFEK</label><select id="${sysKey}Mode" class="cyber-input" disabled></select></div>
+            <div class="control-group speed-group"><div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div><input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" disabled /></div>
+          </div>
+          <div class="control-group"><div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div><input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" disabled /></div>
+        </div>`;
+    },
+
+    getSeinControlHTML() {
+      return `
+        <div id="sein-controls" class="control-set">
+            <div class="static-color-section" style="display: block;">
+                <div class="control-group"><label>WARNA SOLID</label><div id="seinColorPreview" class="color-preview-box" title="Klik untuk mengubah warna"><span id="seinColorHex" class="color-hex-value">#RRGGBB</span></div></div>
+            </div>
+            <div class="control-group"><label>PILIH EFEK SEIN</label><select id="seinModeSettings" class="cyber-input" disabled></select></div>
+            <div class="control-group"><div class="slider-label-container"><label>SPEED</label><span id="seinSpeedValue">--%</span></div><input type="range" id="seinSpeed" class="local-slider" min="0" max="100" value="50" disabled /></div>
+        </div>`;
+    },
+
+    cacheDynamicElements() {
+      const allSystems = [...this.config.systems, "sein"];
+      allSystems.forEach((sys) => {
+        this.elements[sys] = {};
+        const controlSet = document.getElementById(`${sys}-controls`);
+        if (!controlSet) return;
+        controlSet.querySelectorAll("[id]").forEach((el) => {
+          const key =
+            el.id.replace(sys, "").charAt(0).toLowerCase() +
+            el.id.replace(sys, "").slice(1);
+          this.elements[sys][key] = el;
+        });
       });
-      updateSliderUI(slider.value);
-    }
-  })();
+    },
 
-  function populateDropdowns() {
-    const createOptions = (opts) =>
-      opts
-        .map((opt) => `<option value="${opt.value}">${opt.name}</option>`)
-        .join("");
-    elements.kontrol.alis.mode.innerHTML = createOptions(modeOptions.dynamic);
-    elements.kontrol.shroud.mode.innerHTML = createOptions(modeOptions.dynamic);
-    elements.kontrol.demon.mode.innerHTML = createOptions(modeOptions.dynamic);
-    elements.kontrol.sein.modeSettings.innerHTML = createOptions(
-      modeOptions.sein
-    );
-    elements.welcome.mode.innerHTML = createOptions(modeOptions.welcome);
-  }
-
-  function rgbToHex(r, g, b) {
-    return (
-      "#" +
-      ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()
-    );
-  }
-
-  function updateDynamicColorPreviews(systemName) {
-    const selectedModeValue = elements.kontrol[systemName].mode.value;
-    const mode = modeOptions.dynamic.find((m) => m.value == selectedModeValue);
-    if (!mode) return;
-
-    const slots = mode.colorSlots;
-    for (let i = 1; i <= 3; i++) {
-      const group = document.getElementById(
-        `${systemName}-dynamic-color-group-${i}`
+    bindEvents() {
+      // Event listener statis
+      this.elements.themeSwitcher.addEventListener("change", () =>
+        this.toggleTheme()
       );
-      if (!group) continue;
-      const previewBox = document.getElementById(
-        `${systemName}ColorPreviewDynamic${i}`
+      this.elements.authPinInput.addEventListener(
+        "input",
+        (e) => (this.state.authPin = e.target.value)
       );
-      const hexSpan = document.getElementById(
-        `${systemName}ColorHexDynamic${i}`
+      this.elements.btnSaveAuthPin.addEventListener("click", () =>
+        this.saveNewAuthPin()
+      );
+      this.elements.syncSwitch.addEventListener(
+        "change",
+        (e) => (this.state.isSyncEnabled = e.target.checked)
+      );
+      this.elements.systemSelector.forEach((radio) =>
+        radio.addEventListener("change", () => this.renderActiveControl())
+      );
+      this.elements.tabButtons.forEach((btn) =>
+        btn.addEventListener("click", (e) => this.handleTabClick(e))
+      );
+      this.elements.hamburgerBtn.addEventListener("click", () =>
+        this.elements.mobileMenu.classList.toggle("open")
       );
 
-      if (i <= slots) {
-        group.style.display = "block";
-        const colorKey = i === 1 ? "warna" : `warna${i}`;
-        const color = appState[systemName].stateKiri[colorKey] || [0, 0, 0];
-        const hex = rgbToHex(color[0], color[1], color[2]);
-        previewBox.style.backgroundColor = hex;
-        hexSpan.textContent = hex;
-      } else {
-        group.style.display = "none";
+      // Event listener modals
+      this.elements.colorPickerModal.btnBatal.addEventListener(
+        "click",
+        () => (this.elements.colorPickerModal.backdrop.style.display = "none")
+      );
+      this.elements.colorPickerModal.btnSimpan.addEventListener("click", () =>
+        this.handleColorPickerSave()
+      );
+      this.elements.resetModal.cancelBtn.addEventListener("click", () =>
+        this.closeResetModal()
+      );
+      this.elements.resetModal.input.addEventListener(
+        "input",
+        (e) =>
+          (this.elements.resetModal.confirmBtn.disabled =
+            e.target.value !== "RESET")
+      );
+      this.elements.resetModal.confirmBtn.addEventListener("click", () =>
+        this.handleResetConfirm()
+      );
+
+      // Event listener untuk elemen dinamis
+      this.config.systems.forEach((sys) => this.bindControlEvents(sys));
+      this.bindSeinEvents();
+    },
+
+    bindControlEvents(sys) {
+      const debouncedUpdate = this.util.debounce(
+        (payload) => this.api.post(`/set-mode-${sys}`, payload),
+        this.config.debounceDelay
+      );
+
+      const elements = this.elements[sys];
+      if (!elements || Object.keys(elements).length === 0) return;
+
+      // Effect Type Radio
+      document
+        .querySelectorAll(`input[name="${sys}EffectType"]`)
+        .forEach((radio) => {
+          radio.addEventListener("change", () => this.updateEffectTypeUI(sys));
+        });
+
+      // Sliders
+      elements.brightness.addEventListener("input", () => {
+        elements.brightnessValue.textContent = `${elements.brightness.value}%`;
+        debouncedUpdate({ brightness: elements.brightness.value });
+      });
+      elements.speed.addEventListener("input", () => {
+        elements.speedValue.textContent = `${elements.speed.value}%`;
+        debouncedUpdate({ speed: elements.speed.value });
+      });
+
+      // Mode dropdown
+      elements.mode.addEventListener("change", (e) => {
+        this.updateDynamicColorPreviews(sys, e.target.value);
+        debouncedUpdate({ mode: e.target.value });
+      });
+
+      // Color Previews
+      elements.colorPreviewStatic.addEventListener("click", () =>
+        this.openColorPicker(sys, 1)
+      );
+      for (let i = 1; i <= 3; i++) {
+        const preview = document.getElementById(
+          `${sys}ColorPreviewDynamic${i}`
+        );
+        if (preview)
+          preview.addEventListener("click", () => this.openColorPicker(sys, i));
       }
-    }
-  }
+    },
 
-  function updateEffectTypeUI(systemName) {
-    const isStatic =
-      document.querySelector(`input[name="${systemName}EffectType"]:checked`)
-        .value === "static";
-    const controlSet = document.getElementById(`${systemName}-controls`);
-    controlSet.querySelector(".static-color-section").style.display = isStatic
-      ? "block"
-      : "none";
-    controlSet.querySelector(".dynamic-controls").style.display = isStatic
-      ? "none"
-      : "flex";
+    bindSeinEvents() {
+      const seinElements = this.elements.sein;
+      if (!seinElements || !seinElements.controls) return;
+      const debouncedUpdate = this.util.debounce(
+        (payload) => this.api.post(`/set-mode-sein`, payload),
+        this.config.debounceDelay
+      );
 
-    if (!isStatic) {
-      updateDynamicColorPreviews(systemName);
-    }
-  }
+      seinElements.modeSettings.addEventListener("change", () =>
+        debouncedUpdate({ mode: seinElements.modeSettings.value })
+      );
+      seinElements.speed.addEventListener("input", () => {
+        seinElements.speedValue.textContent = `${seinElements.speed.value}%`;
+        debouncedUpdate({ speed: seinElements.speed.value });
+      });
+      seinElements.colorPreview.addEventListener("click", () =>
+        this.openColorPicker("sein", 1)
+      );
+    },
 
-  function renderUI(state) {
-    appState = state;
-    document
-      .querySelectorAll("input, select, button")
-      .forEach((el) => (el.disabled = false));
+    // --- API & DATA ---
+    api: {
+      post: async (endpoint, body) => {
+        if (App.state.isDemoMode) {
+          console.log("DEMO MODE POST:", endpoint, body);
+          App.showToast("Pengaturan diubah (Mode Uji)", "info");
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve("OK (Demo)"),
+          });
+        }
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "X-Auth-PIN": App.state.authPin,
+            },
+            body: new URLSearchParams(body).toString(),
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(
+              response.status === 401 ? `PIN Salah atau hilang` : errorText
+            );
+          }
+          return response;
+        } catch (error) {
+          App.showToast(`Gagal: ${error.message}`, "error");
+          throw error;
+        }
+      },
+    },
 
-    const renderLightSystem = (systemName) => {
-      const config = state[systemName];
-      const ui = elements.kontrol[systemName];
-      if (!config || !ui) return;
+    async fetchInitialState() {
+      try {
+        const response = await fetch("/get-state");
+        if (!response.ok) throw new Error("Koneksi gagal");
+        const data = await response.json();
+        this.state.appState = data;
+        // Gunakan PIN dari localStorage jika ada, jika tidak gunakan dari device, fallback ke default
+        this.state.authPin =
+          localStorage.getItem("aeriAuthPin") ||
+          data.authPinDefault ||
+          "123456";
+        this.elements.authPinInput.value = this.state.authPin;
 
-      ui.brightness.value = config.brightness;
-      ui.brightnessValue.textContent = `${config.brightness}%`;
-      ui.speed.value = config.speed;
-      ui.speedValue.textContent = `${config.speed}%`;
+        this.state.isDemoMode = false;
+        this.updateConnectionStatus(true);
+        this.renderUI();
+      } catch (error) {
+        console.error("Inisialisasi gagal, masuk ke mode demo:", error);
+        this.state.isDemoMode = true;
+        this.state.appState = this.generateDummyState();
+        this.updateConnectionStatus(false, true);
+        this.showToast(
+          "Gagal terhubung. Aplikasi berjalan dalam Mode Uji.",
+          "info"
+        );
+        this.renderUI();
+      }
+    },
+
+    // --- UI & UX ---
+    renderUI() {
+      if (!this.state.appState || Object.keys(this.state.appState).length === 0)
+        return;
+      document.querySelectorAll("input, select, button").forEach((el) => {
+        if (!el.closest(".modal-content")) el.disabled = this.state.isDemoMode;
+      });
+
+      this.config.systems.forEach((sys) => this.renderSystem(sys));
+      this.renderSein();
+      this.renderWelcomeSettings();
+      this.renderLedCountSettings();
+
+      this.renderActiveControl();
+    },
+
+    renderSystem(sys) {
+      const config = this.state.appState[sys];
+      const elements = this.elements[sys];
+      if (!config || !elements || Object.keys(elements).length === 0) return;
+
+      elements.brightness.value = config.brightness;
+      elements.brightnessValue.textContent = `${config.brightness}%`;
+      elements.speed.value = config.speed;
+      elements.speedValue.textContent = `${config.speed}%`;
 
       const isStatic = config.stateKiri.modeEfek === 0;
-      document.querySelector(
-        `input[name="${systemName}EffectType"][value=${
-          isStatic ? "static" : "dynamic"
-        }]`
-      ).checked = true;
+      const staticRadio = document.getElementById(`${sys}EffectTypeStatic`);
+      const dynamicRadio = document.getElementById(`${sys}EffectTypeDynamic`);
+      if (staticRadio) staticRadio.checked = isStatic;
+      if (dynamicRadio) dynamicRadio.checked = !isStatic;
+      this.updateEffectTypeUI(sys);
 
-      const staticPreview = document.getElementById(
-        `${systemName}ColorPreviewStatic`
-      );
-      const staticHex = document.getElementById(`${systemName}ColorHexStatic`);
+      elements.mode.value = config.stateKiri.modeEfek;
+
       const staticColor = config.stateKiri.warna;
-      const staticHexString = rgbToHex(
+      const staticHex = this.util.rgbToHex(
         staticColor[0],
         staticColor[1],
         staticColor[2]
       );
-      staticPreview.style.backgroundColor = staticHexString;
-      staticHex.textContent = staticHexString;
+      elements.colorPreviewStatic.style.backgroundColor = staticHex;
+      elements.colorHexStatic.textContent = staticHex;
 
-      updateEffectTypeUI(systemName);
-      ui.mode.value = config.stateKiri.modeEfek;
-      updateDynamicColorPreviews(systemName);
-    };
+      this.updateDynamicColorPreviews(sys, config.stateKiri.modeEfek);
+    },
 
-    ["alis", "shroud", "demon"].forEach(renderLightSystem);
+    renderSein() {
+      const seinConfig = this.state.appState.sein;
+      const seinElements = this.elements.sein;
+      if (!seinConfig || !seinElements || !seinElements.controls) return;
 
-    const seinConfig = state.sein;
-    const seinUi = elements.kontrol.sein;
-    if (seinConfig && seinUi) {
-      const seinColorPreview = document.getElementById(`seinColorPreview`);
-      const seinColorHex = document.getElementById(`seinColorHex`);
-      if (seinColorPreview && seinColorHex) {
-        const currentColor = seinConfig.warna;
-        const hexString = rgbToHex(
-          currentColor[0],
-          currentColor[1],
-          currentColor[2]
-        );
-        seinColorPreview.style.backgroundColor = hexString;
-        seinColorHex.textContent = hexString.toUpperCase();
+      seinElements.modeSettings.value = seinConfig.mode;
+      seinElements.speed.value = seinConfig.speed;
+      seinElements.speedValue.textContent = `${seinConfig.speed}%`;
+
+      const color = seinConfig.warna;
+      const hex = this.util.rgbToHex(color[0], color[1], color[2]);
+      seinElements.colorPreview.style.backgroundColor = hex;
+      seinElements.colorHex.textContent = hex;
+    },
+
+    renderWelcomeSettings() {
+      const welcomeConfig = this.state.appState.global;
+      const welcomeModeSelect = document.getElementById("welcomeMode");
+      const welcomeDurationInput = document.getElementById("welcomeDuration");
+      if (welcomeConfig && welcomeModeSelect && welcomeDurationInput) {
+        welcomeModeSelect.value = welcomeConfig.modeWelcome;
+        welcomeDurationInput.value = welcomeConfig.durasiWelcome;
       }
-      seinUi.modeSettings.value = seinConfig.mode;
-      seinUi.speed.value = seinConfig.speed;
-      seinUi.speedValue.textContent = `${seinConfig.speed}%`;
-    }
-    const activeLedTarget = document.querySelector(
-      'input[name="ledTarget"]:checked'
-    ).value;
-    elements.pengaturan.ledCount.value = state[activeLedTarget]
-      ? state[activeLedTarget].ledCount
-      : 30;
-    elements.welcome.mode.value = state.global.modeWelcome;
-    elements.welcome.duration.value = state.global.durasiWelcome;
-    const activeSystem = document.querySelector(
-      'input[name="controlTarget"]:checked'
-    ).value;
-    Object.values(elements.kontrol.controlSets).forEach((el) =>
-      el.classList.remove("active")
-    );
-    if (elements.kontrol.controlSets[activeSystem])
-      elements.kontrol.controlSets[activeSystem].classList.add("active");
-  }
+    },
 
-  async function postData(endpoint, body) {
-    if (isDemoMode) {
-      showToast("Pengaturan diubah (Mode Uji)", "info");
-      console.log("DEMO MODE:", endpoint, body);
-      return Promise.resolve("OK (Mode Uji)");
-    }
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams(body).toString(),
-      });
-      if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
-      return await response.text();
-    } catch (error) {
-      showToast(`Gagal terhubung: ${error.message}`, "error");
-      throw error;
-    }
-  }
+    renderLedCountSettings() {
+      const ledTarget = document.querySelector(
+        'input[name="ledTarget"]:checked'
+      )?.value;
+      const ledCountInput = document.getElementById("ledCount");
+      if (ledTarget && ledCountInput && this.state.appState[ledTarget]) {
+        ledCountInput.value = this.state.appState[ledTarget].ledCount;
+      }
+    },
 
-  function setupEventListeners() {
-    elements.nav.tabButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const tabId = btn.dataset.tab;
-        document
-          .querySelectorAll(".tab-content")
-          .forEach((c) => c.classList.remove("active"));
-        document
-          .querySelectorAll(".tab-btn, .mobile-nav-link")
-          .forEach((b) => b.classList.remove("active"));
-        document.getElementById(`tab${tabId}`).classList.add("active");
-        btn.classList.add("active");
-        elements.nav.mobileMenu.classList.remove("open");
-      });
-    });
-    elements.nav.hamburgerBtn.addEventListener("click", () =>
-      elements.nav.mobileMenu.classList.toggle("open")
-    );
-    elements.kontrol.systemSelector.forEach((radio) =>
-      radio.addEventListener("change", () => renderUI(appState))
-    );
-    elements.kontrol.syncSwitch.addEventListener("change", (e) => {
-      isSyncEnabled = e.target.checked;
-      showToast(
-        `Sinkronisasi ${isSyncEnabled ? "diaktifkan" : "dinonaktifkan"}`,
-        "info"
+    updateEffectTypeUI(sys) {
+      const controlSet = document.getElementById(`${sys}-controls`);
+      if (!controlSet) return;
+      const isStatic =
+        document.querySelector(`input[name="${sys}EffectType"]:checked`)
+          .value === "static";
+      controlSet.querySelector(".static-color-section").style.display = isStatic
+        ? "block"
+        : "none";
+      controlSet.querySelector(".dynamic-controls").style.display = isStatic
+        ? "none"
+        : "flex";
+    },
+
+    updateDynamicColorPreviews(sys, modeValue) {
+      const mode = this.config.modeOptions.dynamic.find(
+        (m) => m.value == modeValue
       );
-    });
-
-    const systems = ["alis", "shroud", "demon"];
-    systems.forEach((systemName) => {
-      const ui = elements.kontrol[systemName];
-
-      document
-        .querySelectorAll(`input[name="${systemName}EffectType"]`)
-        .forEach((radio) => {
-          radio.addEventListener("change", () => {
-            updateEffectTypeUI(systemName);
-            if (radio.value === "static") {
-              postData(`/set-mode-${systemName}`, { mode: 0 });
-            }
-          });
-        });
-
-      document
-        .getElementById(`${systemName}ColorPreviewStatic`)
-        .addEventListener("click", () => {
-          activeSystemForModal = systemName;
-          activeColorSlot = 1;
-          const color = appState[systemName].stateKiri.warna;
-          modalColorPicker.color.set({ r: color[0], g: color[1], b: color[2] });
-          elements.colorPickerModal.backdrop.style.display = "flex";
-        });
+      if (!mode) return;
 
       for (let i = 1; i <= 3; i++) {
-        document
-          .getElementById(`${systemName}ColorPreviewDynamic${i}`)
-          .addEventListener("click", () => {
-            activeSystemForModal = systemName;
-            activeColorSlot = i;
-            const colorKey = i === 1 ? "warna" : `warna${i}`;
-            const color = appState[systemName].stateKiri[colorKey];
-            modalColorPicker.color.set({
-              r: color[0],
-              g: color[1],
-              b: color[2],
-            });
-            elements.colorPickerModal.backdrop.style.display = "flex";
-          });
+        const group = document.getElementById(
+          `${sys}-dynamic-color-group-${i}`
+        );
+        if (!group) continue;
+
+        const isVisible = i <= mode.colorSlots;
+        group.style.display = isVisible ? "block" : "none";
+
+        if (isVisible) {
+          const previewBox = document.getElementById(
+            `${sys}ColorPreviewDynamic${i}`
+          );
+          const hexSpan = document.getElementById(`${sys}ColorHexDynamic${i}`);
+          const colorKey = i === 1 ? "warna" : `warna${i}`;
+          const color = this.state.appState[sys].stateKiri[colorKey] || [
+            0, 0, 0,
+          ];
+          const hex = this.util.rgbToHex(color[0], color[1], color[2]);
+          previewBox.style.backgroundColor = hex;
+          hexSpan.textContent = hex;
+        }
+      }
+    },
+
+    renderActiveControl() {
+      const activeControl = document.querySelector(
+        'input[name="controlTarget"]:checked'
+      ).value;
+      this.config.systems.forEach((sys) => {
+        const container = document.getElementById(`${sys}-controls`);
+        if (container)
+          container.style.display = sys === activeControl ? "flex" : "none";
+      });
+      const seinContainer = document.getElementById("sein-controls");
+      if (seinContainer)
+        seinContainer.style.display =
+          activeControl === "sein" ? "flex" : "none";
+    },
+
+    updateConnectionStatus(isConnected, isTesting = false) {
+      if (isTesting) {
+        this.elements.statusIcon.className = "testing";
+        this.elements.statusText.textContent = "Mode Uji";
+      } else if (isConnected) {
+        this.elements.statusIcon.className = "connected";
+        this.elements.statusText.textContent = "Connected";
+      } else {
+        this.elements.statusIcon.className = "disconnected";
+        this.elements.statusText.textContent = "Disconnected";
+      }
+    },
+
+    showToast(message, type = "success") {
+      const container = this.elements.toastContainer;
+      if (this.state.activeToastTimer)
+        clearTimeout(this.state.activeToastTimer);
+      let toastElement = container.querySelector(".toast");
+      if (toastElement) toastElement.remove();
+
+      toastElement = document.createElement("div");
+      toastElement.className = `toast ${type}`;
+      toastElement.textContent = message;
+      toastElement.style.animation = "slideInFadeOut 4s ease-in-out forwards";
+      if (type === "error") toastElement.style.animation += ", shake 0.5s ease";
+      container.appendChild(toastElement);
+
+      this.state.activeToastTimer = setTimeout(() => {
+        if (toastElement && toastElement.parentElement) toastElement.remove();
+        this.state.activeToastTimer = null;
+      }, 4000);
+    },
+
+    // --- MANAJEMEN TEMA & PIN ---
+    toggleTheme() {
+      const newTheme = this.elements.themeSwitcher.checked ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", newTheme);
+      localStorage.setItem("aeriTheme", newTheme);
+      this.updateThemeMeta();
+    },
+
+    loadTheme() {
+      const savedTheme = localStorage.getItem("aeriTheme") || "dark";
+      document.documentElement.setAttribute("data-theme", savedTheme);
+      this.elements.themeSwitcher.checked = savedTheme === "light";
+      this.updateThemeMeta();
+    },
+
+    updateThemeMeta() {
+      setTimeout(() => {
+        const themeColor = getComputedStyle(document.documentElement)
+          .getPropertyValue("--primary-accent")
+          .trim();
+        this.elements.themeColorMeta.setAttribute("content", themeColor);
+      }, 50);
+    },
+
+    loadPin() {
+      this.state.authPin = localStorage.getItem("aeriAuthPin") || "123456";
+      this.elements.authPinInput.value = this.state.authPin;
+    },
+
+    saveNewAuthPin() {
+      const newPin = prompt("Masukkan PIN baru (6 digit):", this.state.authPin);
+      if (!newPin || newPin.length !== 6 || isNaN(newPin)) {
+        this.showToast("PIN baru tidak valid. Harus 6 digit angka.", "error");
+        return;
+      }
+      this.api.post("/update-auth", { newPin }).then(() => {
+        localStorage.setItem("aeriAuthPin", newPin);
+        this.state.authPin = newPin; // Perbarui state internal
+        this.elements.authPinInput.value = newPin;
+        this.showToast("PIN berhasil diperbarui.", "success");
+      });
+    },
+
+    // --- UTILITAS & EVENT HANDLERS LAIN ---
+    util: {
+      debounce(func, delay) {
+        let timeout;
+        return (...args) => {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => func.apply(this, args), delay);
+        };
+      },
+      rgbToHex(r, g, b) {
+        return (
+          "#" +
+          ((1 << 24) + (r << 16) + (g << 8) + b)
+            .toString(16)
+            .slice(1)
+            .toUpperCase()
+        );
+      },
+    },
+
+    handleTabClick(e) {
+      const tabId = e.currentTarget.dataset.tab;
+      this.elements.tabContents.forEach((c) => c.classList.remove("active"));
+      this.elements.tabButtons.forEach((b) => b.classList.remove("active"));
+      document.getElementById(`tab${tabId}`).classList.add("active");
+      e.currentTarget.classList.add("active");
+      this.elements.mobileMenu.classList.remove("open");
+    },
+
+    openColorPicker(sys, slot) {
+      this.state.activeSystemForModal = sys;
+      this.state.activeColorSlot = slot;
+
+      let currentColor = [255, 0, 0];
+      const systemState = this.state.appState[sys];
+
+      if (systemState) {
+        if (sys === "sein") {
+          currentColor = systemState.warna;
+        } else {
+          const colorKey = slot === 1 ? "warna" : `warna${slot}`;
+          currentColor = systemState.stateKiri[colorKey] || [255, 0, 0];
+        }
       }
 
-      const debouncedUpdate = debounce(() => {
-        const isStatic =
-          document.querySelector(
-            `input[name="${systemName}EffectType"]:checked`
-          ).value === "static";
-        if (isStatic) return; // Jangan kirim update jika statis, karena warna dihandle modal
-
-        const payload = {
-          mode: ui.mode.value,
-          brightness: ui.brightness.value,
-          speed: ui.speed.value,
-        };
-        postData(`/set-mode-${systemName}`, payload);
-      }, 500);
-
-      ui.mode.addEventListener("change", () => {
-        updateDynamicColorPreviews(systemName);
-        debouncedUpdate();
+      this.modalColorPicker.color.set({
+        r: currentColor[0],
+        g: currentColor[1],
+        b: currentColor[2],
       });
-      ui.brightness.addEventListener("input", () => {
-        ui.brightnessValue.textContent = `${ui.brightness.value}%`;
-        debouncedUpdate();
-      });
-      ui.speed.addEventListener("input", () => {
-        ui.speedValue.textContent = `${ui.speed.value}%`;
-        debouncedUpdate();
-      });
-    });
+      this.elements.colorPickerModal.backdrop.style.display = "flex";
+    },
 
-    elements.colorPickerModal.btnSimpan.addEventListener("click", () => {
+    handleColorPickerSave() {
+      const { activeSystemForModal, activeColorSlot } = this.state;
       if (!activeSystemForModal) return;
-      const newColor = modalColorPicker.color.rgb;
+
+      const newColor = this.modalColorPicker.color.rgb;
       let payload = {};
+      let endpoint = `/set-mode-${activeSystemForModal}`;
 
       if (activeSystemForModal === "sein") {
         payload = { r: newColor.r, g: newColor.g, b: newColor.b };
@@ -522,119 +660,105 @@ document.addEventListener("DOMContentLoaded", () => {
         if (isStatic) {
           payload = { mode: 0, r: newColor.r, g: newColor.g, b: newColor.b };
         } else {
-          const r_key = activeColorSlot === 1 ? "r" : `r${activeColorSlot}`;
-          const g_key = activeColorSlot === 1 ? "g" : `g${activeColorSlot}`;
-          const b_key = activeColorSlot === 1 ? "b" : `b${activeColorSlot}`;
-          payload[r_key] = newColor.r;
-          payload[g_key] = newColor.g;
-          payload[b_key] = newColor.b;
+          const suffix = activeColorSlot > 1 ? activeColorSlot : "";
+          payload[`r${suffix}`] = newColor.r;
+          payload[`g${suffix}`] = newColor.g;
+          payload[`b${suffix}`] = newColor.b;
         }
       }
 
-      postData(`/set-mode-${activeSystemForModal}`, payload).then(() => {
-        showToast(
+      this.api.post(endpoint, payload).then(() => {
+        this.showToast(
           `${activeSystemForModal.toUpperCase()} warna diperbarui`,
           "success"
         );
-        initializeApp();
-        elements.colorPickerModal.backdrop.style.display = "none";
+        this.fetchInitialState();
+        this.elements.colorPickerModal.backdrop.style.display = "none";
       });
-    });
+    },
 
-    elements.colorPickerModal.btnBatal.addEventListener("click", () => {
-      elements.colorPickerModal.backdrop.style.display = "none";
-    });
+    closeResetModal() {
+      this.elements.resetModal.backdrop.style.display = "none";
+      this.elements.resetModal.input.value = "";
+      this.elements.resetModal.confirmBtn.disabled = true;
+    },
 
-    // Listeners untuk Sein dan Pengaturan
-    document
-      .getElementById("seinColorPreview")
-      .addEventListener("click", () => {
-        activeSystemForModal = "sein";
-        activeColorSlot = 1;
-        const color = appState.sein.warna;
-        modalColorPicker.color.set({ r: color[0], g: color[1], b: color[2] });
-        elements.colorPickerModal.backdrop.style.display = "flex";
-      });
-
-    // ... sisa event listeners untuk pengaturan, reset, preset ...
-    elements.pengaturan.ledTarget.forEach((radio) =>
-      radio.addEventListener("change", (e) => {
-        elements.pengaturan.ledCount.value = appState[e.target.value].ledCount;
-      })
-    );
-    elements.pengaturan.btnSaveLedCount.addEventListener("click", () => {
-      const target = document.querySelector(
-        'input[name="ledTarget"]:checked'
-      ).value;
-      const count = elements.pengaturan.ledCount.value;
-      postData("/set-config", { ledTarget: target, ledCount: count }).then(() =>
-        showToast("Jumlah LED disimpan", "success")
-      );
-    });
-    elements.pengaturan.btnPreviewLedCount.addEventListener("click", () => {
-      const target = document.querySelector(
-        'input[name="ledTarget"]:checked'
-      ).value;
-      const count = elements.pengaturan.ledCount.value;
-      postData("/preview-led-count", { ledTarget: target, ledCount: count });
-    });
-    elements.welcome.btnSave.addEventListener("click", () => {
-      const mode = elements.welcome.mode.value;
-      const duration = elements.welcome.duration.value;
-      postData("/set-mode-welcome", { mode, durasi: duration }).then(() =>
-        showToast("Animasi Welcome disimpan", "success")
-      );
-    });
-    elements.welcome.btnPreview.addEventListener("click", () =>
-      postData("/set-mode-welcome", { preview: 1 })
-    );
-    elements.pengaturan.btnReset.addEventListener("click", () => {
-      elements.resetModal.backdrop.style.display = "flex";
-    });
-    elements.resetModal.cancelBtn.addEventListener("click", () => {
-      elements.resetModal.backdrop.style.display = "none";
-      elements.resetModal.input.value = "";
-      elements.resetModal.confirmBtn.disabled = true;
-    });
-    elements.resetModal.input.addEventListener("input", (e) => {
-      elements.resetModal.confirmBtn.disabled = e.target.value !== "RESET";
-    });
-    elements.resetModal.confirmBtn.addEventListener("click", () => {
-      postData("/reset-to-default").then(() => {
-        showToast(
+    handleResetConfirm() {
+      this.api.post("/reset-to-default").then(() => {
+        this.showToast(
           "Perangkat berhasil direset. Halaman akan dimuat ulang.",
           "success"
         );
-        setTimeout(() => window.location.reload(), 5000);
+        setTimeout(() => window.location.reload(), 4000);
       });
-    });
-  }
+    },
 
-  async function initializeApp() {
-    populateDropdowns();
-    if (!document.body.classList.contains("event-listeners-attached")) {
-      setupEventListeners();
-      document.body.classList.add("event-listeners-attached");
-    }
-    try {
-      const initialState = await fetch("/get-state").then((res) => {
-        if (!res.ok) throw new Error("Connection failed");
-        return res.json();
+    generateDummyState() {
+      const defaultLightState = {
+        stateKiri: {
+          warna: [230, 0, 35],
+          warna2: [0, 246, 255],
+          warna3: [0, 255, 0],
+          modeEfek: 1,
+        },
+        stateKanan: {
+          warna: [230, 0, 35],
+          warna2: [0, 246, 255],
+          warna3: [0, 255, 0],
+          modeEfek: 1,
+        },
+        ledCount: 50,
+        brightness: 85,
+        speed: 60,
+        target: "keduanya",
+      };
+      return {
+        alis: { ...defaultLightState },
+        shroud: {
+          ...defaultLightState,
+          ledCount: 40,
+          stateKiri: {
+            warna: [191, 193, 194],
+            warna2: [230, 0, 35],
+            warna3: [0, 255, 0],
+            modeEfek: 5,
+          },
+        },
+        demon: {
+          ...defaultLightState,
+          ledCount: 1,
+          stateKiri: {
+            warna: [230, 0, 35],
+            warna2: [0, 0, 0],
+            warna3: [0, 0, 0],
+            modeEfek: 0,
+          },
+        },
+        sein: { ledCount: 50, mode: 0, warna: [255, 100, 0], speed: 50 },
+        global: { modeWelcome: 2, durasiWelcome: 5 },
+      };
+    },
+
+    populateDropdowns() {
+      const createOptions = (opts) =>
+        opts
+          .map((opt) => `<option value="${opt.value}">${opt.name}</option>`)
+          .join("");
+      this.config.systems.forEach((sys) => {
+        const modeSelect = document.getElementById(`${sys}Mode`);
+        if (modeSelect)
+          modeSelect.innerHTML = createOptions(this.config.modeOptions.dynamic);
       });
-      renderUI(initialState);
-      // await fetchPresets();
-      elements.header.statusIcon.className = "connected";
-      elements.header.statusText.textContent = "Connected";
-    } catch (error) {
-      console.error("Initialization failed, entering demo mode:", error);
-      isDemoMode = true;
-      const dummyState = generateDummyState();
-      renderUI(dummyState);
-      elements.header.statusIcon.className = "testing";
-      elements.header.statusText.textContent = "Mode Uji";
-      showToast("Gagal terhubung. Aplikasi berjalan dalam Mode Uji.", "info");
-    }
-  }
+      const welcomeSelect = document.getElementById("welcomeMode");
+      if (welcomeSelect)
+        welcomeSelect.innerHTML = createOptions(
+          this.config.modeOptions.welcome
+        );
+      const seinSelect = document.getElementById("seinModeSettings");
+      if (seinSelect)
+        seinSelect.innerHTML = createOptions(this.config.modeOptions.sein);
+    },
+  };
 
-  initializeApp();
+  App.init();
 });

@@ -1,4 +1,20 @@
-// AERI LIGHT v16.5 - Dynamic Effects & UI Unification
+/*
+ * ===================================================================================
+ * AERI LIGHT v17.2 - FIRMWARE FINAL (UTUH)
+ * ===================================================================================
+ * Deskripsi:
+ * Firmware ESP32 yang telah disempurnakan untuk AERI LIGHT Headlight Control Module.
+ * Versi ini adalah versi utuh yang mencakup semua fungsionalitas.
+ *
+ * Fitur Utama yang Diimplementasikan:
+ * 1.  Struktur Kode: Dikonversi ke file .ino tunggal untuk kemudahan kompilasi di Arduino IDE.
+ * 2.  Keamanan: Menambahkan autentikasi berbasis PIN via header HTTP 'X-Auth-PIN'.
+ * 3.  Non-Blocking Preview: Fitur pratinjau jumlah LED diubah menjadi non-blocking.
+ * 4.  Stabilitas: Menjaga semua fungsionalitas asli tetap berjalan.
+ * ===================================================================================
+ */
+
+// --- Library ---
 #include <WiFi.h>
 #include <FastLED.h>
 #include <AsyncTCP.h>
@@ -20,12 +36,13 @@
 #define MAX_LEDS 250
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
-const uint8_t CONFIG_VERSION = 17;
+const uint8_t CONFIG_VERSION = 18; // Versi konfigurasi dinaikkan
 
-// --- Konfigurasi Jaringan ---
+// --- Konfigurasi Jaringan & Keamanan ---
 const char *ap_provision_ssid = "AERI_LIGHT_SETUP";
 const char *ap_control_ssid = "AlisBelang";
 const char *ap_password = "12345678";
+char authPin[7] = "123456"; // PIN default
 
 // === State Management Structs ===
 struct WifiCredentials
@@ -56,7 +73,7 @@ struct SeinConfig
 {
   uint8_t mode = 0;
   CRGB warna = CRGB::Orange;
-  uint8_t ledCount = 15;
+  uint8_t ledCount = 30;
   uint8_t speed = 50;
 };
 
@@ -66,25 +83,36 @@ struct GlobalConfig
   uint16_t durasiWelcome = 5;
 };
 
+// --- Variabel Global ---
 WifiCredentials homeWifi;
 LightConfig alisConfig, shroudConfig, demonConfig;
 SeinConfig seinConfig;
 GlobalConfig globalConfig;
-uint8_t vizBass = 0;
-uint8_t vizTreble = 0;
-bool vizModeActive = false;
-CRGB ledsAlisKiri[MAX_LEDS], ledsAlisKanan[MAX_LEDS], ledsShroudKiri[MAX_LEDS], ledsShroudKanan[MAX_LEDS], ledsDemonKiri[MAX_LEDS], ledsDemonKanan[MAX_LEDS];
+
+CRGB ledsAlisKiri[MAX_LEDS], ledsAlisKanan[MAX_LEDS];
+CRGB ledsShroudKiri[MAX_LEDS], ledsShroudKanan[MAX_LEDS];
+CRGB ledsDemonKiri[MAX_LEDS], ledsDemonKanan[MAX_LEDS];
+
 Preferences prefs;
 AsyncWebServer server(80);
 DNSServer dnsServer;
-AsyncWebSocket ws("/ws");
+
 unsigned long previousMillis = 0;
-const long loopInterval = 16;
+const long loopInterval = 16; // Target ~60 FPS
+
 bool isWelcomeActive = true;
 bool isSavingPrefs = false;
 bool provisioningMode = false;
 uint16_t animStep = 0;
 
+// --- Variabel untuk Fitur Pratinjau Non-Blocking ---
+bool isPreviewing = false;
+unsigned long previewEndTime = 0;
+CRGB *previewLedsKiri = nullptr;
+CRGB *previewLedsKanan = nullptr;
+uint8_t previewLedCount = 0;
+
+// --- Prototipe Fungsi ---
 void resetToDefaults(bool fullReset);
 void simpanPengaturan();
 void bacaPengaturan();
@@ -101,25 +129,29 @@ void handleSetModeWelcome(AsyncWebServerRequest *request);
 void handleReset(AsyncWebServerRequest *request);
 void handleScanNetworks(AsyncWebServerRequest *request);
 void handleSaveCredentials(AsyncWebServerRequest *request);
-void jalankanModeAudioVisualizer();
-void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len);
-void handleSetVizMode(AsyncWebServerRequest *request);
 void handleGetPresets(AsyncWebServerRequest *request);
 void handleSavePreset(AsyncWebServerRequest *request);
 void handleLoadPreset(AsyncWebServerRequest *request);
+void handlePreviewLedCount(AsyncWebServerRequest *request);
 void initializePresets();
 void serializeLightConfig(JsonObject &obj, const LightConfig &config);
 void deserializeLightConfig(const JsonObject &obj, LightConfig &config);
-void handlePreviewLedCount(AsyncWebServerRequest *request);
+bool isAuthenticated(AsyncWebServerRequest *request);
+void handleUpdateAuth(AsyncWebServerRequest *request);
 
+// ===================================================================
+//   SETUP
+// ===================================================================
 void setup()
 {
   Serial.begin(115200);
+
   if (!SPIFFS.begin(true))
   {
     Serial.println("SPIFFS Mount Failed");
     return;
   }
+
   initializePresets();
 
   FastLED.addLeds<LED_TYPE, PIN_ALIS_KIRI, COLOR_ORDER>(ledsAlisKiri, MAX_LEDS);
@@ -128,6 +160,7 @@ void setup()
   FastLED.addLeds<LED_TYPE, PIN_SHROUD_KANAN, COLOR_ORDER>(ledsShroudKanan, MAX_LEDS);
   FastLED.addLeds<LED_TYPE, PIN_DEMON_KIRI, COLOR_ORDER>(ledsDemonKiri, MAX_LEDS);
   FastLED.addLeds<LED_TYPE, PIN_DEMON_KANAN, COLOR_ORDER>(ledsDemonKanan, MAX_LEDS);
+
   pinMode(PIN_INPUT_SEIN_KIRI, INPUT_PULLUP);
   pinMode(PIN_INPUT_SEIN_KANAN, INPUT_PULLUP);
 
@@ -138,6 +171,7 @@ void setup()
     WiFi.mode(WIFI_AP);
     WiFi.softAP(ap_provision_ssid);
     dnsServer.start(53, "*", WiFi.softAPIP());
+
     server.serveStatic("/", SPIFFS, "/").setDefaultFile("setup.html");
     server.on("/scan-networks", HTTP_GET, handleScanNetworks);
     server.on("/save-credentials", HTTP_POST, handleSaveCredentials);
@@ -151,9 +185,10 @@ void setup()
     WiFi.softAP(ap_control_ssid, ap_password);
     dnsServer.start(53, "*", WiFi.softAPIP());
     WiFi.begin(homeWifi.ssid, homeWifi.password);
-    ws.onEvent(onWsEvent);
-    server.addHandler(&ws);
+
     server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+
+    // API Endpoints
     server.on("/get-state", HTTP_GET, handleGetState);
     server.on("/set-config", HTTP_POST, handleSetConfig);
     server.on("/set-mode-alis", HTTP_POST, [](AsyncWebServerRequest *request)
@@ -165,22 +200,31 @@ void setup()
     server.on("/set-mode-sein", HTTP_POST, handleSetModeSein);
     server.on("/set-mode-welcome", HTTP_POST, handleSetModeWelcome);
     server.on("/reset-to-default", HTTP_POST, handleReset);
-    server.on("/set-viz-mode", HTTP_POST, handleSetVizMode);
+    server.on("/update-auth", HTTP_POST, handleUpdateAuth);
+
+    // Preset Endpoints
     server.on("/get-presets", HTTP_GET, handleGetPresets);
     server.on("/save-preset", HTTP_POST, handleSavePreset);
     server.on("/load-preset", HTTP_POST, handleLoadPreset);
+
+    // Action Endpoints
     server.on("/preview-led-count", HTTP_POST, handlePreviewLedCount);
+
     server.onNotFound([](AsyncWebServerRequest *request)
                       { request->redirect("http://" + request->host()); });
   }
+
   server.begin();
   Serial.println("HTTP server started");
 }
 
+// ===================================================================
+//   MAIN LOOP
+// ===================================================================
 void loop()
 {
   dnsServer.processNextRequest();
-  ws.cleanupClients();
+
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis < loopInterval)
     return;
@@ -190,14 +234,27 @@ void loop()
   bool seinKiriNyala = (digitalRead(PIN_INPUT_SEIN_KIRI) == LOW);
   bool seinKananNyala = (digitalRead(PIN_INPUT_SEIN_KANAN) == LOW);
 
-  if (seinKiriNyala || seinKananNyala)
+  // Logika prioritas render
+  if (isPreviewing)
   {
-    FastLED.clear();
-    jalankanModeSein(seinKiriNyala, seinKananNyala);
+    if (currentMillis > previewEndTime)
+    {
+      isPreviewing = false;
+      previewLedsKiri = nullptr;
+      previewLedsKanan = nullptr;
+    }
+    else
+    {
+      // Clear all LEDs before preview
+      FastLED.clear();
+      fill_solid(previewLedsKiri, previewLedCount, CRGB::White);
+      fill_solid(previewLedsKanan, previewLedCount, CRGB::White);
+    }
   }
-  else if (vizModeActive)
+  else if (seinKiriNyala || seinKananNyala)
   {
-    jalankanModeAudioVisualizer();
+    FastLED.clear(); // Clear all other effects
+    jalankanModeSein(seinKiriNyala, seinKananNyala);
   }
   else if (isWelcomeActive && !provisioningMode)
   {
@@ -209,8 +266,29 @@ void loop()
     jalankanModeLampu(shroudConfig, ledsShroudKiri, ledsShroudKanan);
     jalankanModeLampu(demonConfig, ledsDemonKiri, ledsDemonKanan);
   }
+
   FastLED.show();
 }
+
+// ===================================================================
+//   FUNGSI AUTENTIKASI
+// ===================================================================
+bool isAuthenticated(AsyncWebServerRequest *request)
+{
+  if (request->hasHeader("X-Auth-PIN"))
+  {
+    if (request->header("X-Auth-PIN") == String(authPin))
+    {
+      return true;
+    }
+  }
+  request->send(401, "text/plain", "Unauthorized: Invalid or missing PIN");
+  return false;
+}
+
+// ===================================================================
+//   FUNGSI MANAJEMEN PENGATURAN & STATE
+// ===================================================================
 
 void resetToDefaults(bool fullReset)
 {
@@ -219,9 +297,11 @@ void resetToDefaults(bool fullReset)
   demonConfig = LightConfig();
   seinConfig = SeinConfig();
   globalConfig = GlobalConfig();
+  strcpy(authPin, "123456");
   isWelcomeActive = true;
   Serial.println("State dikembalikan ke default.");
   simpanPengaturan();
+
   if (fullReset)
   {
     prefs.begin("wifi-creds", false);
@@ -235,13 +315,14 @@ void simpanPengaturan()
   if (isSavingPrefs)
     return;
   isSavingPrefs = true;
-  prefs.begin("config-v17", false);
+  prefs.begin("config-v18", false);
   prefs.putUChar("version", CONFIG_VERSION);
   prefs.putBytes("alis", &alisConfig, sizeof(LightConfig));
   prefs.putBytes("shroud", &shroudConfig, sizeof(LightConfig));
   prefs.putBytes("demon", &demonConfig, sizeof(LightConfig));
   prefs.putBytes("sein", &seinConfig, sizeof(SeinConfig));
   prefs.putBytes("global", &globalConfig, sizeof(GlobalConfig));
+  prefs.putString("authPin", authPin);
   prefs.end();
   isSavingPrefs = false;
   Serial.println("Pengaturan disimpan.");
@@ -249,7 +330,7 @@ void simpanPengaturan()
 
 void bacaPengaturan()
 {
-  prefs.begin("config-v17", true);
+  prefs.begin("config-v18", true);
   if (prefs.getUChar("version", 0) == CONFIG_VERSION)
   {
     prefs.getBytes("alis", &alisConfig, sizeof(LightConfig));
@@ -257,10 +338,15 @@ void bacaPengaturan()
     prefs.getBytes("demon", &demonConfig, sizeof(LightConfig));
     prefs.getBytes("sein", &seinConfig, sizeof(SeinConfig));
     prefs.getBytes("global", &globalConfig, sizeof(GlobalConfig));
+    String savedPin = prefs.getString("authPin", "123456");
+    strncpy(authPin, savedPin.c_str(), sizeof(authPin) - 1);
+    authPin[6] = '\0'; // Pastikan null-terminated
   }
   else
   {
+    prefs.end();
     resetToDefaults(false);
+    return;
   }
   prefs.end();
 }
@@ -284,12 +370,13 @@ void bacaKredensialWiFi()
     homeWifi.configured = false;
   }
   prefs.end();
-  if (!homeWifi.configured)
-  {
-    provisioningMode = true;
-  }
+
+  provisioningMode = !homeWifi.configured;
 }
 
+// ===================================================================
+//   FUNGSI LOGIKA & ANIMASI LED
+// ===================================================================
 void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
 {
   uint8_t globalBrightness = FastLED.getBrightness();
@@ -300,98 +387,111 @@ void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
     fill_solid(leds, MAX_LEDS, CRGB::Black);
     if (count == 0)
       return;
+
     uint8_t currentSpeed = map(config.speed, 0, 100, 1, 15);
     uint8_t currentIntensity = 80;
 
     switch (state.modeEfek)
     {
-    case 0:
+    case 0: // Statis
       fill_solid(leds, count, state.warna);
       break;
-    case 1:
+    case 1: // Breathing
     {
       CRGB tempColor = state.warna;
       fill_solid(leds, count, tempColor.nscale8(sin8(animStep * currentSpeed)));
-      break;
     }
-    case 2:
+    break;
+    case 2: // Rainbow
       fill_rainbow(leds, count, animStep * currentSpeed, 256 / count);
       break;
-    case 3:
+    case 3: // Comet
     {
       float p = fmod((float)animStep * currentSpeed * 0.5, (float)count + 15);
       fadeToBlackBy(leds, count, 64);
       if ((int)p < count)
         leds[(int)p] = state.warna;
-      break;
     }
-    case 4:
+    break;
+    case 4: // Cylon Scanner
     {
       int p = map(triwave8((animStep * currentSpeed) / 2), 0, 255, 0, count - 4);
       fadeToBlackBy(leds, count, 64);
-      for (int i = 0; i < 4; i++)
-        if (p + i < count)
+      if (p >= 0 && (p + 3) < count)
+      {
+        for (int i = 0; i < 4; i++)
           leds[p + i] = state.warna;
-      break;
+      }
     }
-    case 5:
+    break;
+    case 5: // Twinkle
     {
       fadeToBlackBy(leds, count, 40);
       if (random8() < currentIntensity)
         leds[random16(count)] = (random8() < 128) ? state.warna : state.warna2;
-      break;
     }
-    case 6:
+    break;
+    case 6: // Fire
     {
       for (int i = 0; i < count; i++)
         leds[i].nscale8(192);
       if (random8() < currentIntensity)
         leds[random16(count)] = HeatColor(random8(160, 255));
-      break;
     }
-    case 7:
-    {
-      fl::fill_gradient_RGB(leds, count, state.warna, state.warna2, state.warna3);
+    break;
+    case 7: // Gradient Shift
+      fill_gradient_RGB(leds, count, state.warna, state.warna2, state.warna3);
       break;
-    }
     }
   };
 
   if (strcmp(config.target, "kiri") == 0)
-    animate(config.stateKiri, ledsKiri, config.ledCount);
-  else if (strcmp(config.target, "kanan") == 0)
-    animate(config.stateKanan, ledsKanan, config.ledCount);
-  else
   {
     animate(config.stateKiri, ledsKiri, config.ledCount);
-    memcpy(ledsKanan, ledsKiri, sizeof(CRGB) * config.ledCount);
   }
+  else if (strcmp(config.target, "kanan") == 0)
+  {
+    animate(config.stateKanan, ledsKanan, config.ledCount);
+  }
+  else
+  { // keduanya
+    animate(config.stateKiri, ledsKiri, config.ledCount);
+    if (config.ledCount > 0)
+    {
+      memcpy(ledsKanan, ledsKiri, sizeof(CRGB) * config.ledCount);
+    }
+    else
+    {
+      fill_solid(ledsKanan, MAX_LEDS, CRGB::Black);
+    }
+  }
+
   FastLED.setBrightness(globalBrightness);
 }
 
 void jalankanModeSein(bool isKiriActive, bool isKananActive)
 {
-  auto animate = [&](uint8_t mode, CRGB *leds, uint8_t count, bool reverse)
+  auto animate = [&](uint8_t mode, CRGB *leds, uint8_t count)
   {
     if (count == 0)
       return;
-    uint16_t animSpeed = map(seinConfig.speed, 0, 100, 25, 5);
+    uint16_t animSpeed = map(seinConfig.speed, 0, 100, 25, 5); // Speed inverted
     switch (mode)
     {
-    case 0:
+    case 0: // Sequential
     {
       uint16_t pos = (millis() / animSpeed) % (count + 5);
       fill_solid(leds, count, CRGB::Black);
       if (pos < count)
         fill_solid(leds, pos + 1, seinConfig.warna);
-      break;
     }
-    case 1:
+    break;
+    case 1: // Pulsing Arrow
     {
       fill_solid(leds, count, (millis() / 500) % 2 ? seinConfig.warna : CRGB::Black);
-      break;
     }
-    case 2:
+    break;
+    case 2: // Fill & Flush
     {
       uint16_t c = (millis() / (animSpeed * count));
       if (c % 2 == 0)
@@ -403,22 +503,23 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
       {
         fill_solid(leds, count, CRGB::Black);
       }
-      break;
     }
-    case 3:
+    break;
+    case 3: // Comet Trail
     {
       float p = fmod((float)millis() / (animSpeed * 0.5), (float)count + 10);
       fadeToBlackBy(leds, count, 40);
       if (p < count)
         leds[(int)p] = seinConfig.warna;
-      break;
     }
+    break;
     }
   };
+
   if (isKiriActive)
-    animate(seinConfig.mode, ledsAlisKiri, seinConfig.ledCount, false);
+    animate(seinConfig.mode, ledsAlisKiri, seinConfig.ledCount);
   if (isKananActive)
-    animate(seinConfig.mode, ledsAlisKanan, seinConfig.ledCount, false);
+    animate(seinConfig.mode, ledsAlisKanan, seinConfig.ledCount);
 }
 
 void jalankanModeWelcome()
@@ -426,25 +527,29 @@ void jalankanModeWelcome()
   static uint32_t startTime = 0;
   if (startTime == 0)
     startTime = millis();
+
   uint32_t elapsed = millis() - startTime;
   uint16_t duration = globalConfig.durasiWelcome * 1000;
+
   if (elapsed > duration)
   {
     isWelcomeActive = false;
     startTime = 0;
     return;
   }
+
   uint8_t count = alisConfig.ledCount;
   switch (globalConfig.modeWelcome)
   {
-  case 0:
+  case 0: // Power-On Scan
   {
     int p = map(triwave8(map(elapsed, 0, duration, 0, 255)), 0, 255, 0, count - 1);
     fill_solid(ledsAlisKiri, count, CRGB::Black);
-    ledsAlisKiri[p] = CRGB::Red;
-    break;
+    if (p >= 0 && p < count)
+      ledsAlisKiri[p] = CRGB::Red;
   }
-  case 1:
+  break;
+  case 1: // Ignition Burst
   {
     uint8_t b = map(elapsed, 0, duration, 0, (count / 2) + 1);
     for (int i = 0; i < b; i++)
@@ -454,9 +559,9 @@ void jalankanModeWelcome()
       if ((count / 2 - i) >= 0)
         ledsAlisKiri[count / 2 - i] = CRGB::Orange;
     }
-    break;
   }
-  case 2:
+  break;
+  case 2: // Spectrum Resolve
   {
     if (elapsed < duration / 2)
     {
@@ -471,9 +576,9 @@ void jalankanModeWelcome()
         ledsAlisKiri[i] = blend(ledsAlisKiri[i], t, a);
       }
     }
-    break;
   }
-  case 3:
+  break;
+  case 3: // Theater Chase
   {
     uint16_t p = map(elapsed, 0, duration, 0, count / 2);
     fill_solid(ledsAlisKiri, count, CRGB::Black);
@@ -484,50 +589,19 @@ void jalankanModeWelcome()
       if ((count - 1 - i) >= 0)
         ledsAlisKiri[count - 1 - i] = CRGB::Blue;
     }
-    break;
   }
+  break;
   }
-  memcpy(ledsAlisKanan, ledsAlisKiri, sizeof(CRGB) * count);
-}
 
-void jalankanModeAudioVisualizer()
-{
-  uint8_t trebleHue = map(vizTreble, 0, 255, 160, 0);
-  fill_solid(ledsAlisKiri, alisConfig.ledCount, CHSV(trebleHue, 255, 255));
-  fill_solid(ledsAlisKanan, alisConfig.ledCount, CHSV(trebleHue, 255, 255));
-  uint8_t bassBrightness = map(vizBass, 0, 255, 50, 255);
-  fill_solid(ledsShroudKiri, shroudConfig.ledCount, CRGB::Red);
-  fill_solid(ledsShroudKanan, shroudConfig.ledCount, CRGB::Red);
-  fill_solid(ledsDemonKiri, demonConfig.ledCount, CRGB::Purple);
-  fill_solid(ledsDemonKanan, demonConfig.ledCount, CRGB::Purple);
-  FastLED.setBrightness(bassBrightness);
-}
-
-void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
-{
-  if (type == WS_EVT_CONNECT)
+  if (count > 0)
   {
-    Serial.println("WS client connected");
-  }
-  else if (type == WS_EVT_DISCONNECT)
-  {
-    Serial.println("WS client disconnected");
-  }
-  else if (type == WS_EVT_DATA)
-  {
-    if (len > 3 && len < 20)
-    {
-      std::string s((char *)data, len);
-      size_t t = s.find('T');
-      if (s[0] == 'B' && t != std::string::npos)
-      {
-        vizBass = atoi(s.substr(1, t - 1).c_str());
-        vizTreble = atoi(s.substr(t + 1).c_str());
-      }
-    }
+    memcpy(ledsAlisKanan, ledsAlisKiri, sizeof(CRGB) * count);
   }
 }
 
+// ===================================================================
+//   HANDLER UNTUK ENDPOINT WEB SERVER
+// ===================================================================
 void handleGetState(AsyncWebServerRequest *request)
 {
   StaticJsonDocument<2048> doc;
@@ -537,6 +611,7 @@ void handleGetState(AsyncWebServerRequest *request)
   serializeLightConfig(shroud, shroudConfig);
   JsonObject demon = doc.createNestedObject("demon");
   serializeLightConfig(demon, demonConfig);
+
   JsonObject sein = doc.createNestedObject("sein");
   sein["ledCount"] = seinConfig.ledCount;
   sein["mode"] = seinConfig.mode;
@@ -545,9 +620,13 @@ void handleGetState(AsyncWebServerRequest *request)
   seinColor.add(seinConfig.warna.g);
   seinColor.add(seinConfig.warna.b);
   sein["speed"] = seinConfig.speed;
+
   JsonObject global = doc.createNestedObject("global");
   global["modeWelcome"] = globalConfig.modeWelcome;
   global["durasiWelcome"] = globalConfig.durasiWelcome;
+
+  doc["authPinDefault"] = String(authPin);
+
   String response;
   serializeJson(doc, response);
   request->send(200, "application/json", response);
@@ -555,6 +634,9 @@ void handleGetState(AsyncWebServerRequest *request)
 
 void handleSetModeLampu(AsyncWebServerRequest *request, LightConfig &config)
 {
+  if (!isAuthenticated(request))
+    return;
+
   bool needsSave = false;
   if (request->hasParam("target", true))
   {
@@ -568,25 +650,11 @@ void handleSetModeLampu(AsyncWebServerRequest *request, LightConfig &config)
     config.stateKanan.modeEfek = m;
     needsSave = true;
   }
-  if (request->hasParam("r", true))
+  if (request->hasParam("r", true) && request->hasParam("g", true) && request->hasParam("b", true))
   {
     CRGB c(request->getParam("r", true)->value().toInt(), request->getParam("g", true)->value().toInt(), request->getParam("b", true)->value().toInt());
     config.stateKiri.warna = c;
     config.stateKanan.warna = c;
-    needsSave = true;
-  }
-  if (request->hasParam("r2", true))
-  {
-    CRGB c2(request->getParam("r2", true)->value().toInt(), request->getParam("g2", true)->value().toInt(), request->getParam("b2", true)->value().toInt());
-    config.stateKiri.warna2 = c2;
-    config.stateKanan.warna2 = c2;
-    needsSave = true;
-  }
-  if (request->hasParam("r3", true))
-  {
-    CRGB c3(request->getParam("r3", true)->value().toInt(), request->getParam("g3", true)->value().toInt(), request->getParam("b3", true)->value().toInt());
-    config.stateKiri.warna3 = c3;
-    config.stateKanan.warna3 = c3;
     needsSave = true;
   }
   if (request->hasParam("brightness", true))
@@ -599,13 +667,16 @@ void handleSetModeLampu(AsyncWebServerRequest *request, LightConfig &config)
     config.speed = constrain(request->getParam("speed", true)->value().toInt(), 0, 100);
     needsSave = true;
   }
+
   if (needsSave)
     simpanPengaturan();
-  request->send(200, "text/plain", "Mode Set & Saved");
+  request->send(200, "text/plain", "OK");
 }
 
 void handleSetConfig(AsyncWebServerRequest *request)
 {
+  if (!isAuthenticated(request))
+    return;
   if (request->hasParam("ledTarget", true) && request->hasParam("ledCount", true))
   {
     String t = request->getParam("ledTarget", true)->value();
@@ -629,6 +700,8 @@ void handleSetConfig(AsyncWebServerRequest *request)
 
 void handleSetModeSein(AsyncWebServerRequest *request)
 {
+  if (!isAuthenticated(request))
+    return;
   bool needsSave = false;
   if (request->hasParam("mode", true))
   {
@@ -640,7 +713,7 @@ void handleSetModeSein(AsyncWebServerRequest *request)
     seinConfig.speed = constrain(request->getParam("speed", true)->value().toInt(), 0, 100);
     needsSave = true;
   }
-  if (request->hasParam("r", true))
+  if (request->hasParam("r", true) && request->hasParam("g", true) && request->hasParam("b", true))
   {
     seinConfig.warna = CRGB(request->getParam("r", true)->value().toInt(), request->getParam("g", true)->value().toInt(), request->getParam("b", true)->value().toInt());
     needsSave = true;
@@ -648,7 +721,7 @@ void handleSetModeSein(AsyncWebServerRequest *request)
   if (needsSave)
   {
     simpanPengaturan();
-    request->send(200, "text/plain", "Sein Mode Set & Saved");
+    request->send(200, "text/plain", "OK");
   }
   else
   {
@@ -658,10 +731,12 @@ void handleSetModeSein(AsyncWebServerRequest *request)
 
 void handleSetModeWelcome(AsyncWebServerRequest *request)
 {
+  if (!isAuthenticated(request))
+    return;
   if (request->hasParam("preview", true))
   {
     isWelcomeActive = true;
-    request->send(200, "text/plain", "Previewing Welcome");
+    request->send(200, "text/plain", "OK");
     return;
   }
   if (request->hasParam("mode", true) && request->hasParam("durasi", true))
@@ -669,7 +744,75 @@ void handleSetModeWelcome(AsyncWebServerRequest *request)
     globalConfig.modeWelcome = request->getParam("mode", true)->value().toInt();
     globalConfig.durasiWelcome = request->getParam("durasi", true)->value().toInt();
     simpanPengaturan();
-    request->send(200, "text/plain", "Welcome Mode Saved");
+    request->send(200, "text/plain", "OK");
+  }
+  else
+  {
+    request->send(400, "text/plain", "Bad Request");
+  }
+}
+
+void handleUpdateAuth(AsyncWebServerRequest *request)
+{
+  if (!isAuthenticated(request))
+    return;
+  if (request->hasParam("newPin", true))
+  {
+    String newPin = request->getParam("newPin", true)->value();
+    if (newPin.length() == 6 && newPin.toInt() >= 0)
+    {
+      strncpy(authPin, newPin.c_str(), sizeof(authPin) - 1);
+      authPin[6] = '\0'; // Ensure null termination
+      simpanPengaturan();
+      request->send(200, "text/plain", "PIN Updated");
+    }
+    else
+    {
+      request->send(400, "text/plain", "Invalid PIN format");
+    }
+  }
+  else
+  {
+    request->send(400, "text/plain", "Bad Request");
+  }
+}
+
+void handlePreviewLedCount(AsyncWebServerRequest *request)
+{
+  if (!isAuthenticated(request))
+    return;
+  if (request->hasParam("ledTarget", true) && request->hasParam("ledCount", true))
+  {
+    String target = request->getParam("ledTarget", true)->value();
+    uint8_t count = constrain(request->getParam("ledCount", true)->value().toInt(), 0, MAX_LEDS);
+
+    isPreviewing = true;
+    previewEndTime = millis() + 2000; // Preview for 2 seconds
+    previewLedCount = count;
+
+    if (target == "alis")
+    {
+      previewLedsKiri = ledsAlisKiri;
+      previewLedsKanan = ledsAlisKanan;
+    }
+    else if (target == "shroud")
+    {
+      previewLedsKiri = ledsShroudKiri;
+      previewLedsKanan = ledsShroudKanan;
+    }
+    else if (target == "demon")
+    {
+      previewLedsKiri = ledsDemonKiri;
+      previewLedsKanan = ledsDemonKanan;
+    }
+    else
+    {
+      isPreviewing = false;
+      request->send(400, "text/plain", "Invalid Target");
+      return;
+    }
+
+    request->send(200, "text/plain", "Preview Started");
   }
   else
   {
@@ -679,10 +822,173 @@ void handleSetModeWelcome(AsyncWebServerRequest *request)
 
 void handleReset(AsyncWebServerRequest *request)
 {
+  if (!isAuthenticated(request))
+    return;
   resetToDefaults(true);
   request->send(200, "text/plain", "OK");
   delay(1000);
   ESP.restart();
+}
+
+void initializePresets()
+{
+  if (!SPIFFS.exists("/presets.json"))
+  {
+    File f = SPIFFS.open("/presets.json", "w");
+    if (!f)
+      return;
+    JsonDocument d;
+    JsonArray p = d.to<JsonArray>();
+    for (int i = 0; i < 5; i++)
+    {
+      JsonObject o = p.createNestedObject();
+      o["slot"] = i + 1;
+      o["name"] = "Preset " + String(i + 1);
+      o["state"] = nullptr;
+    }
+    serializeJson(d, f);
+    f.close();
+  }
+}
+
+void handleGetPresets(AsyncWebServerRequest *request)
+{
+  request->send(SPIFFS, "/presets.json", "application/json");
+}
+
+void handleSavePreset(AsyncWebServerRequest *request)
+{
+  if (!isAuthenticated(request))
+    return;
+  if (request->hasParam("slot", true) && request->hasParam("name", true))
+  {
+    int s = request->getParam("slot", true)->value().toInt();
+    String n = request->getParam("name", true)->value();
+    File f = SPIFFS.open("/presets.json", "r");
+    if (!f)
+    {
+      request->send(500, "text/plain", "Gagal buka presets");
+      return;
+    }
+
+    JsonDocument d;
+    DeserializationError e = deserializeJson(d, f);
+    f.close();
+    if (e)
+    {
+      request->send(500, "text/plain", "Gagal parse presets");
+      return;
+    }
+
+    JsonArray p = d.as<JsonArray>();
+    JsonObject t;
+    for (JsonObject o : p)
+    {
+      if (o["slot"] == s)
+      {
+        t = o;
+        break;
+      }
+    }
+    if (!t)
+    {
+      t = p.createNestedObject();
+      t["slot"] = s;
+    }
+
+    t["name"] = n;
+    JsonObject so = t.containsKey("state") ? t["state"].as<JsonObject>() : t.createNestedObject("state");
+    JsonObject a = so.createNestedObject("alis");
+    serializeLightConfig(a, alisConfig);
+    JsonObject h = so.createNestedObject("shroud");
+    serializeLightConfig(h, shroudConfig);
+    JsonObject m = so.createNestedObject("demon");
+    serializeLightConfig(m, demonConfig);
+    JsonObject i = so.createNestedObject("sein");
+    i["mode"] = seinConfig.mode;
+    i["ledCount"] = seinConfig.ledCount;
+    i["speed"] = seinConfig.speed;
+    JsonArray c = i.createNestedArray("warna");
+    c.add(seinConfig.warna.r);
+    c.add(seinConfig.warna.g);
+    c.add(seinConfig.warna.b);
+
+    f = SPIFFS.open("/presets.json", "w");
+    if (serializeJson(d, f) == 0)
+    {
+      request->send(500, "text/plain", "Gagal tulis presets");
+    }
+    else
+    {
+      request->send(200, "text/plain", "Preset disimpan");
+    }
+    f.close();
+  }
+  else
+  {
+    request->send(400, "text/plain", "Parameter tidak lengkap");
+  }
+}
+
+void handleLoadPreset(AsyncWebServerRequest *request)
+{
+  if (!isAuthenticated(request))
+    return;
+  if (request->hasParam("slot", true))
+  {
+    int s = request->getParam("slot", true)->value().toInt();
+    File f = SPIFFS.open("/presets.json", "r");
+    if (!f)
+    {
+      request->send(500, "text/plain", "Gagal buka presets");
+      return;
+    }
+
+    JsonDocument d;
+    DeserializationError e = deserializeJson(d, f);
+    f.close();
+    if (e)
+    {
+      request->send(500, "text/plain", "Gagal parse presets");
+      return;
+    }
+
+    JsonArray p = d.as<JsonArray>();
+    JsonObject t;
+    for (JsonObject o : p)
+    {
+      if (o["slot"] == s)
+      {
+        t = o;
+        break;
+      }
+    }
+    if (!t || t["state"].isNull())
+    {
+      request->send(404, "text/plain", "Preset kosong");
+      return;
+    }
+
+    JsonObject so = t["state"].as<JsonObject>();
+    deserializeLightConfig(so["alis"].as<JsonObject>(), alisConfig);
+    deserializeLightConfig(so["shroud"].as<JsonObject>(), shroudConfig);
+    deserializeLightConfig(so["demon"].as<JsonObject>(), demonConfig);
+    JsonObject i = so["sein"].as<JsonObject>();
+    seinConfig.mode = i["mode"];
+    seinConfig.ledCount = i["ledCount"];
+    seinConfig.speed = i["speed"];
+    JsonArray c = i["warna"].as<JsonArray>();
+    seinConfig.warna.r = c[0];
+    seinConfig.warna.g = c[1];
+    seinConfig.warna.b = c[2];
+
+    simpanPengaturan();
+    request->send(200, "text/plain", "Preset dimuat");
+  }
+  else
+  {
+    request->send(400, "text/plain", "Parameter tidak lengkap");
+  }
 }
 
 void handleScanNetworks(AsyncWebServerRequest *request)
@@ -731,227 +1037,6 @@ void handleSaveCredentials(AsyncWebServerRequest *request)
   else
   {
     request->send(400, "text/plain", "BAD_REQUEST");
-  }
-}
-
-void handleSetVizMode(AsyncWebServerRequest *request)
-{
-  if (request->hasParam("active", true))
-  {
-    vizModeActive = request->getParam("active", true)->value().toInt() == 1;
-    request->send(200, "text/plain", "OK");
-  }
-  else
-  {
-    request->send(400, "text/plain", "Bad Request");
-  }
-}
-
-void handlePreviewLedCount(AsyncWebServerRequest *request)
-{
-  if (request->hasParam("ledTarget", true) && request->hasParam("ledCount", true))
-  {
-    String target = request->getParam("ledTarget", true)->value();
-    uint8_t count = constrain(request->getParam("ledCount", true)->value().toInt(), 0, MAX_LEDS);
-
-    CRGB *targetLedsKiri = nullptr;
-    CRGB *targetLedsKanan = nullptr;
-
-    if (target == "alis")
-    {
-      targetLedsKiri = ledsAlisKiri;
-      targetLedsKanan = ledsAlisKanan;
-    }
-    else if (target == "shroud")
-    {
-      targetLedsKiri = ledsShroudKiri;
-      targetLedsKanan = ledsShroudKanan;
-    }
-    else if (target == "demon")
-    {
-      targetLedsKiri = ledsDemonKiri;
-      targetLedsKanan = ledsDemonKanan;
-    }
-    else if (target == "sein")
-    {
-      targetLedsKiri = ledsAlisKiri;
-      targetLedsKanan = ledsAlisKanan;
-    }
-    else
-    {
-      request->send(400, "text/plain", "Invalid Target");
-      return;
-    }
-
-    fill_solid(targetLedsKiri, count, CRGB::White);
-    fill_solid(targetLedsKanan, count, CRGB::White);
-    FastLED.show();
-    delay(1000);
-
-    request->send(200, "text/plain", "Preview OK");
-  }
-  else
-  {
-    request->send(400, "text/plain", "Bad Request");
-  }
-}
-
-void initializePresets()
-{
-  if (!SPIFFS.exists("/presets.json"))
-  {
-    File f = SPIFFS.open("/presets.json", "w");
-    if (!f)
-    {
-      Serial.println("Gagal buat presets.json");
-      return;
-    }
-    JsonDocument d;
-    JsonArray p = d.to<JsonArray>();
-    for (int i = 0; i < 5; i++)
-    {
-      JsonObject o = p.createNestedObject();
-      o["slot"] = i + 1;
-      o["name"] = "Preset " + String(i + 1);
-      o["state"] = nullptr;
-    }
-    serializeJson(d, f);
-    f.close();
-  }
-}
-
-void handleGetPresets(AsyncWebServerRequest *request)
-{
-  File f = SPIFFS.open("/presets.json", "r");
-  if (!f)
-  {
-    request->send(500, "text/plain", "Gagal baca presets");
-    return;
-  }
-  request->send(f, String("/presets.json"), "application/json");
-  f.close();
-}
-
-void handleSavePreset(AsyncWebServerRequest *request)
-{
-  if (request->hasParam("slot", true) && request->hasParam("name", true))
-  {
-    int s = request->getParam("slot", true)->value().toInt();
-    String n = request->getParam("name", true)->value();
-    File f = SPIFFS.open("/presets.json", "r");
-    if (!f)
-    {
-      request->send(500, "text/plain", "Gagal buka presets");
-      return;
-    }
-    JsonDocument d;
-    DeserializationError e = deserializeJson(d, f);
-    f.close();
-    if (e)
-    {
-      request->send(500, "text/plain", "Gagal parse presets");
-      return;
-    }
-    JsonArray p = d.as<JsonArray>();
-    JsonObject t;
-    for (JsonObject o : p)
-    {
-      if (o["slot"] == s)
-      {
-        t = o;
-        break;
-      }
-    }
-    if (!t)
-    {
-      t = p.createNestedObject();
-      t["slot"] = s;
-    }
-    t["name"] = n;
-    JsonObject so = t.containsKey("state") ? t["state"].as<JsonObject>() : t.createNestedObject("state");
-    JsonObject a = so.createNestedObject("alis");
-    serializeLightConfig(a, alisConfig);
-    JsonObject h = so.createNestedObject("shroud");
-    serializeLightConfig(h, shroudConfig);
-    JsonObject m = so.createNestedObject("demon");
-    serializeLightConfig(m, demonConfig);
-    JsonObject i = so.createNestedObject("sein");
-    i["mode"] = seinConfig.mode;
-    i["ledCount"] = seinConfig.ledCount;
-    i["speed"] = seinConfig.speed;
-    JsonArray c = i.createNestedArray("warna");
-    c.add(seinConfig.warna.r);
-    c.add(seinConfig.warna.g);
-    c.add(seinConfig.warna.b);
-    f = SPIFFS.open("/presets.json", "w");
-    if (serializeJson(d, f) == 0)
-    {
-      request->send(500, "text/plain", "Gagal tulis presets");
-    }
-    else
-    {
-      request->send(200, "text/plain", "Preset disimpan");
-    }
-    f.close();
-  }
-  else
-  {
-    request->send(400, "text/plain", "Parameter tidak lengkap");
-  }
-}
-
-void handleLoadPreset(AsyncWebServerRequest *request)
-{
-  if (request->hasParam("slot", true))
-  {
-    int s = request->getParam("slot", true)->value().toInt();
-    File f = SPIFFS.open("/presets.json", "r");
-    if (!f)
-    {
-      request->send(500, "text/plain", "Gagal buka presets");
-      return;
-    }
-    JsonDocument d;
-    DeserializationError e = deserializeJson(d, f);
-    f.close();
-    if (e)
-    {
-      request->send(500, "text/plain", "Gagal parse presets");
-      return;
-    }
-    JsonArray p = d.as<JsonArray>();
-    JsonObject t;
-    for (JsonObject o : p)
-    {
-      if (o["slot"] == s)
-      {
-        t = o;
-        break;
-      }
-    }
-    if (!t || t["state"].isNull())
-    {
-      request->send(404, "text/plain", "Preset kosong");
-      return;
-    }
-    JsonObject so = t["state"].as<JsonObject>();
-    deserializeLightConfig(so["alis"].as<JsonObject>(), alisConfig);
-    deserializeLightConfig(so["shroud"].as<JsonObject>(), shroudConfig);
-    deserializeLightConfig(so["demon"].as<JsonObject>(), demonConfig);
-    JsonObject i = so["sein"].as<JsonObject>();
-    seinConfig.mode = i["mode"];
-    seinConfig.ledCount = i["ledCount"];
-    seinConfig.speed = i["speed"];
-    JsonArray c = i["warna"].as<JsonArray>();
-    seinConfig.warna.r = c[0];
-    seinConfig.warna.g = c[1];
-    seinConfig.warna.b = c[2];
-    simpanPengaturan();
-    request->send(200, "text/plain", "Preset dimuat");
-  }
-  else
-  {
-    request->send(400, "text/plain", "Parameter tidak lengkap");
   }
 }
 

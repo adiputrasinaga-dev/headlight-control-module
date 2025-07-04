@@ -1,12 +1,18 @@
-/* =================================================================== */
-/* AERI LIGHT v14.0 - Stylesheet                                       */
-/* =================================================================== */
-/* Theme: ROG Edition with Modal Color Picker                          */
-/* Includes: Fix for Modal Layout & Slider Bug                         */
-/* =================================================================== */
+/*
+ * ===================================================================
+ * AERI LIGHT v17.2 - STYLESHEET FINAL
+ * ===================================================================
+ * Deskripsi Perubahan:
+ * 1.  Dark/Light Mode: Menambahkan variabel warna untuk kedua tema.
+ * 2.  Theme Switcher: CSS untuk toggle switch tema baru.
+ * 3.  Perbaikan Minor: Merapikan beberapa properti dan menambahkan
+ * style untuk elemen baru seperti divider dan small text.
+ * ===================================================================
+ */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700&display=swap");
 
 :root {
+  /* Dark Theme (Default) */
   --bg-color: #101114;
   --panel-bg: #1d1f23;
   --primary-accent: #e60023;
@@ -19,9 +25,32 @@
   --success-color: #39ff14; /* Neon Green */
   --error-color: #e60023;
   --info-color: #7f848e;
+  --input-bg: rgba(16, 17, 20, 0.8);
+  --divider-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="light"] {
+  --bg-color: #f0f2f5;
+  --panel-bg: #ffffff;
+  --primary-accent: #d32f2f;
+  --primary-glow: rgba(211, 47, 47, 0.4);
+  --secondary-accent: #5f6368;
+  --secondary-glow: rgba(95, 99, 104, 0.3);
+  --text-color: #202124;
+  --text-muted: #5f6368;
+  --border-color: rgba(211, 47, 47, 0.3);
+  --success-color: #00c853;
+  --error-color: #d32f2f;
+  --info-color: #5f6368;
+  --input-bg: #e8eaed;
+  --divider-color: rgba(0, 0, 0, 0.1);
 }
 
 /* --- Base, Typography & Layout Fixes --- */
+html,
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
 html {
   height: 100%;
 }
@@ -38,10 +67,10 @@ body {
   -webkit-tap-highlight-color: transparent;
   background-color: var(--bg-color);
   background-image: linear-gradient(
-      rgba(255, 255, 255, 0.02) 1px,
+      rgba(128, 128, 128, 0.05) 1px,
       transparent 1px
     ),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(128, 128, 128, 0.05) 1px, transparent 1px);
   background-size: 30px 30px;
   min-height: 100%;
   overflow-y: auto;
@@ -169,6 +198,7 @@ details.cyber-panel,
   margin-bottom: 25px;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
+  transition: background-color 0.3s, border-color 0.3s;
 }
 .cyber-panel .panel-body,
 details.cyber-panel .panel-body {
@@ -211,24 +241,24 @@ details[open] > summary {
   margin-bottom: -15px;
   font-weight: 700;
 }
+.control-group > small {
+  text-align: center;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  margin-top: -10px;
+}
 .slider-label-container {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
-.color-picker-wrapper {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  flex-wrap: wrap;
-}
 .control-set {
   display: none;
+  flex-direction: column;
+  gap: 30px;
 }
 .control-set.active {
   display: flex;
-  flex-direction: column;
-  gap: 30px;
 }
 
 .btn {
@@ -253,7 +283,9 @@ details[open] > summary {
 }
 .btn:hover:not(:disabled) {
   background-color: var(--primary-accent);
-  color: var(--text-color);
+  color: var(
+    --bg-color
+  ) !important; /* Important needed to override more specific selectors */
   transform: translateY(-2px);
   box-shadow: 0 0 20px 5px var(--primary-glow);
 }
@@ -263,8 +295,15 @@ details[open] > summary {
 }
 .btn.btn-secondary:hover:not(:disabled) {
   background-color: var(--info-color);
-  color: var(--bg-color);
   box-shadow: 0 0 20px 5px var(--secondary-glow);
+}
+.btn.btn-danger {
+  color: var(--error-color);
+  border-color: var(--error-color);
+}
+.btn.btn-danger:hover:not(:disabled) {
+  background-color: var(--error-color);
+  box-shadow: 0 0 20px 5px var(--primary-glow);
 }
 .btn:disabled {
   opacity: 0.4;
@@ -280,12 +319,18 @@ details[open] > summary {
   gap: 15px;
   flex-wrap: wrap;
 }
+hr.divider {
+  border: none;
+  height: 1px;
+  background-color: var(--divider-color);
+  margin: 25px 0;
+}
 
 select,
 input[type="text"],
 input[type="number"],
 input[type="password"] {
-  background: rgba(16, 17, 20, 0.8);
+  background: var(--input-bg);
   border: 1px solid var(--text-muted);
   color: var(--text-color);
   padding: 15px;
@@ -295,7 +340,7 @@ input[type="password"] {
   width: 100%;
   box-sizing: border-box;
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
-  transition: border-color 0.3s, box-shadow 0.3s;
+  transition: border-color 0.3s, box-shadow 0.3s, background-color 0.3s;
 }
 select:focus,
 input:focus {
@@ -312,7 +357,6 @@ input:focus {
   overflow: hidden;
 }
 .radio-group label,
-.segmented-control label,
 .segmented-control .sg-btn {
   flex-grow: 1;
   text-align: center;
@@ -320,7 +364,7 @@ input:focus {
   cursor: pointer;
   font-weight: 700;
   transition: all 0.2s ease-in-out;
-  background-color: rgba(30, 31, 35, 0.5);
+  background-color: transparent;
   border: none;
   color: var(--text-muted);
 }
@@ -329,14 +373,12 @@ input:focus {
   display: none;
 }
 .radio-group input[type="radio"]:checked + label,
-.segmented-control input[type="radio"]:checked + label,
 .segmented-control .sg-btn.active {
   background-color: var(--secondary-accent);
   color: var(--bg-color);
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
 }
 .radio-group label:not(:last-of-type),
-.segmented-control label:not(:last-of-type),
 .segmented-control .sg-btn:not(:last-of-type) {
   border-right: 1px solid var(--border-color);
 }
@@ -359,10 +401,11 @@ input[type="range"] {
   -webkit-appearance: none;
   width: 100%;
   height: 4px;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--input-bg);
   outline: none;
   border: 1px solid var(--text-muted);
   padding: 0;
+  transition: background-color 0.3s;
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -370,7 +413,7 @@ input[type="range"]::-webkit-slider-thumb {
   height: 24px;
   background: var(--primary-accent);
   cursor: pointer;
-  border: 2px solid var(--text-color);
+  border: 2px solid var(--panel-bg);
   clip-path: polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   margin-top: -10px; /* Vertical alignment fix for webkit */
@@ -380,7 +423,7 @@ input[type="range"]::-moz-range-thumb {
   height: 24px;
   background: var(--primary-accent);
   cursor: pointer;
-  border: 2px solid var(--text-color);
+  border: 2px solid var(--panel-bg);
   border-radius: 0;
 }
 
@@ -417,7 +460,7 @@ input[type="range"]::-moz-range-thumb {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #333;
+  background-color: var(--input-bg);
   transition: 0.4s;
   border-radius: 34px;
   border: 1px solid var(--text-muted);
@@ -427,9 +470,9 @@ input[type="range"]::-moz-range-thumb {
   content: "";
   height: 26px;
   width: 26px;
-  left: 4px;
-  bottom: 4px;
-  background-color: white;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-color);
   transition: 0.4s;
   border-radius: 50%;
 }
@@ -506,7 +549,7 @@ input:checked + .slider:before {
   color: var(--text-muted);
 }
 .cyber-input-small {
-  background: rgba(16, 17, 20, 0.8);
+  background: var(--input-bg);
   border: 1px solid var(--text-muted);
   color: var(--text-color);
   padding: 8px;
@@ -541,7 +584,7 @@ input:checked + .slider:before {
 }
 .modal-color-picker #btnModalSimpan {
   background-color: var(--primary-accent);
-  color: var(--text-color);
+  color: var(--panel-bg);
 }
 .modal-color-picker #btnModalSimpan:hover {
   box-shadow: 0 0 15px var(--primary-glow);
@@ -549,6 +592,11 @@ input:checked + .slider:before {
 
 .static-color-section {
   display: block;
+}
+.dynamic-controls {
+  display: none;
+  flex-direction: column;
+  gap: 30px;
 }
 .color-preview-box {
   height: 50px;
@@ -636,6 +684,50 @@ input:checked + .slider:before {
   border-color: var(--info-color);
 }
 
+/* ===== Theme Switcher ===== */
+.theme-switcher-container {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.theme-switcher-label {
+  width: 50px;
+  height: 26px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--text-muted);
+  border-radius: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.3s;
+}
+.theme-switcher-label::after {
+  /* The moving ball */
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--secondary-accent);
+  left: 3px;
+  transition: transform 0.3s ease;
+}
+.theme-switcher-checkbox {
+  display: none;
+}
+.theme-switcher-checkbox:checked + .theme-switcher-label::after {
+  transform: translateX(24px);
+}
+.theme-switcher-label svg {
+  width: 18px;
+  height: 18px;
+  color: var(--secondary-accent);
+}
+
 /* --- Mobile Specific --- */
 @media (max-width: 768px) {
   .desktop-nav {
@@ -688,54 +780,11 @@ input:checked + .slider:before {
     text-align: left;
     font-size: 1.2em;
     text-transform: uppercase;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(128, 128, 128, 0.1);
     font-weight: 700;
   }
   .mobile-nav-link.active {
     color: var(--primary-accent);
     background: var(--panel-bg);
   }
-}
-
-/* ===== Color-Picker Modal Enhancements v1.1 ===== */
-@media (min-width: 768px) {
-  .modal-content.modal-color-picker {
-    padding: 30px 40px;
-    max-width: 520px;
-  }
-}
-
-#modalBrightnessSlider {
-  height: 8px;
-  border-radius: 4px;
-  background: linear-gradient(to right, #000 0%, var(--primary-accent) 100%);
-  margin-top: 6px;
-}
-
-.brightness-value {
-  font-size: 0.9em;
-  font-weight: 700;
-  color: var(--secondary-accent);
-  letter-spacing: 0.5px;
-}
-
-.modal-color-preview {
-  height: 80px;
-  border-radius: 10px;
-  border-width: 3px;
-}
-
-.cyber-input-small {
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
-}
-
-.btn.btn-secondary {
-  color: var(--text-color);
-  border: 1px solid var(--text-muted);
-  background: rgba(255, 255, 255, 0.04);
-}
-.btn.btn-secondary:hover:not(:disabled) {
-  border-color: var(--secondary-accent);
-  background: var(--panel-bg);
-  box-shadow: 0 0 12px var(--secondary-glow);
 }
