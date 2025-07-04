@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="description" content="AERI LIGHT Production Release v16.5" />
+    <meta name="theme-color" content="#E60023" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>AERI LIGHT // v16.5</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="iro.min.js"></script>
+  </head>
+  <body>
+    <div id="toast-container"></div>
+
+    <div id="reset-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-content">
+        <h3>Konfirmasi Reset Pabrik</h3>
+        <p>
+          Aksi ini tidak dapat dibatalkan. Semua pengaturan, termasuk kredensial
+          WiFi, akan dihapus. Ketik "RESET" untuk mengonfirmasi.
+        </p>
+        <input
+          type="text"
+          id="reset-confirm-input"
+          class="cyber-input"
+          placeholder="Ketik RESET di sini..."
+        />
+        <div class="modal-actions">
+          <button id="reset-cancel-btn" class="btn btn-secondary">Batal</button>
+          <button id="reset-confirm-btn" class="btn btn-danger" disabled>
+            Konfirmasi Reset
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="color-picker-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-content modal-color-picker">
+        <h3>Pilih Warna</h3>
+        <div id="modalColorPreview" class="modal-color-preview"></div>
+        <div
+          id="modalColorPickerContainer"
+          class="color-picker-container"
+        ></div>
+        <div class="control-group">
+          <label>BRIGHTNESS</label>
+          <input
+            type="range"
+            id="modalBrightnessSlider"
+            class="local-slider"
+            min="0"
+            max="100"
+            value="100"
+          />
+        </div>
+        <div class="modal-input-group">
+          <div class="input-wrapper hex-input">
+            <label for="modalHexInput">HEX</label>
+            <input
+              type="text"
+              id="modalHexInput"
+              class="cyber-input-small"
+              maxlength="7"
+            />
+          </div>
+          <div class="input-wrapper">
+            <label for="modalRedInput">R</label>
+            <input
+              type="number"
+              id="modalRedInput"
+              class="cyber-input-small"
+              min="0"
+              max="255"
+            />
+          </div>
+          <div class="input-wrapper">
+            <label for="modalGreenInput">G</label>
+            <input
+              type="number"
+              id="modalGreenInput"
+              class="cyber-input-small"
+              min="0"
+              max="255"
+            />
+          </div>
+          <div class="input-wrapper">
+            <label for="modalBlueInput">B</label>
+            <input
+              type="number"
+              id="modalBlueInput"
+              class="cyber-input-small"
+              min="0"
+              max="255"
+            />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="btnModalBatal" class="btn btn-secondary">Batal</button>
+          <button id="btnModalSimpan" class="btn">Simpan</button>
+        </div>
+      </div>
+    </div>
+
+    <header class="main-header">
+      <button id="hamburger-btn" class="hamburger-btn">
+        <span></span><span></span><span></span>
+      </button>
+      <h1>AERI LIGHT</h1>
+      <div id="statusIndicator">
+        <div id="statusIcon" class="disconnected"></div>
+        <span id="statusText">Disconnected</span>
+      </div>
+    </header>
+
+    <main>
+      <nav class="desktop-nav">
+        <button id="btnTabKontrol" data-tab="Kontrol" class="tab-btn active">
+          KONTROL
+        </button>
+        <button id="btnTabPengaturan" data-tab="Pengaturan" class="tab-btn">
+          PENGATURAN
+        </button>
+      </nav>
+      <nav id="mobile-menu" class="mobile-menu">
+        <button data-tab="Kontrol" class="mobile-nav-link active">
+          KONTROL
+        </button>
+        <button data-tab="Pengaturan" class="mobile-nav-link">
+          PENGATURAN
+        </button>
+      </nav>
+
+      <div id="tabKontrol" class="tab-content active">
+        <section class="cyber-panel">
+          <div class="panel-body">
+            <div class="sync-toggle-container">
+              <label for="syncSwitch">SINKRONKAN (ALIS, SHROUD, DEMON)</label>
+              <label class="switch">
+                <input type="checkbox" id="syncSwitch" />
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="radio-group system-selector">
+              <input
+                type="radio"
+                id="controlTargetAlis"
+                name="controlTarget"
+                value="alis"
+                checked
+              /><label for="controlTargetAlis">ALIS</label>
+              <input
+                type="radio"
+                id="controlTargetShroud"
+                name="controlTarget"
+                value="shroud"
+              /><label for="controlTargetShroud">SHROUD</label>
+              <input
+                type="radio"
+                id="controlTargetDemon"
+                name="controlTarget"
+                value="demon"
+              /><label for="controlTargetDemon">DEMON</label>
+              <input
+                type="radio"
+                id="controlTargetSein"
+                name="controlTarget"
+                value="sein"
+              /><label for="controlTargetSein">SEIN</label>
+            </div>
+
+            <div id="alis-controls" class="control-set active">
+              <div class="control-group">
+                <label class="control-label">TARGET</label>
+                <div class="segmented-control" data-target-group="alis">
+                  <button class="sg-btn" data-value="kiri" title="Hanya Kiri">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path
+                        d="M15.25 4.75a.75.75 0 00-1.06 0L8.72 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L10.31 11l5.94-5.19a.75.75 0 000-1.06z"
+                      ></path>
+                    </svg>
+                  </button>
+                  <button
+                    class="sg-btn active"
+                    data-value="keduanya"
+                    title="Kiri & Kanan"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path
+                        d="M8.75 4.75a.75.75 0 00-1.06 0L2.22 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L3.31 11l5.94-5.19a.75.75 0 000-1.06zm6.5 0a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L20.69 11l-5.94-5.19a.75.75 0 010-1.06z"
+                      ></path>
+                    </svg>
+                  </button>
+                  <button class="sg-btn" data-value="kanan" title="Hanya Kanan">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path
+                        d="M8.75 4.75a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L13.69 11l-5.94-5.19a.75.75 0 010-1.06z"
+                      ></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="control-group">
+                <label class="control-label">TIPE EFEK</label>
+                <div class="radio-group" data-type-group="alis">
+                  <input
+                    type="radio"
+                    id="alisEffectTypeStatic"
+                    name="alisEffectType"
+                    value="static"
+                    checked
+                  /><label for="alisEffectTypeStatic">Statis</label>
+                  <input
+                    type="radio"
+                    id="alisEffectTypeDynamic"
+                    name="alisEffectType"
+                    value="dynamic"
+                  /><label for="alisEffectTypeDynamic">Dinamis</label>
+                </div>
+              </div>
+
+              <div class="static-color-section">
+                <div class="control-group">
+                  <label>WARNA SOLID</label>
+                  <div
+                    id="alisColorPreviewStatic"
+                    class="color-preview-box"
+                    title="Klik untuk mengubah warna"
+                  >
+                    <span id="alisColorHexStatic" class="color-hex-value"
+                      >#RRGGBB</span
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="dynamic-controls"
+                style="display: none; flex-direction: column; gap: 30px"
+              >
+                <div class="dynamic-color-previews-container">
+                  <div
+                    class="control-group"
+                    id="alis-dynamic-color-group-1"
+                    style="display: none"
+                  >
+                    <label>WARNA 1</label>
+                    <div
+                      id="alisColorPreviewDynamic1"
+                      class="color-preview-box"
+                      title="Klik untuk mengubah Warna 1"
+                    >
+                      <span id="alisColorHexDynamic1" class="color-hex-value"
+                        >#RRGGBB</span
+                      >
+                    </div>
+                  </div>
+                  <div
+                    class="control-group"
+                    id="alis-dynamic-color-group-2"
+                    style="display: none"
+                  >
+                    <label>WARNA 2</label>
+                    <div
+                      id="alisColorPreviewDynamic2"
+                      class="color-preview-box"
+                      title="Klik untuk mengubah Warna 2"
+                    >
+                      <span id="alisColorHexDynamic2" class="color-hex-value"
+                        >#RRGGBB</span
+                      >
+                    </div>
+                  </div>
+                  <div
+                    class="control-group"
+                    id="alis-dynamic-color-group-3"
+                    style="display: none"
+                  >
+                    <label>WARNA 3</label>
+                    <div
+                      id="alisColorPreviewDynamic3"
+                      class="color-preview-box"
+                      title="Klik untuk mengubah Warna 3"
+                    >
+                      <span id="alisColorHexDynamic3" class="color-hex-value"
+                        >#RRGGBB</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="control-group">
+                  <label>MODE EFEK</label>
+                  <select id="alisMode" class="cyber-input" disabled></select>
+                </div>
+                <div class="control-group speed-group">
+                  <div class="slider-label-container">
+                    <label>SPEED</label><span id="alisSpeedValue">--%</span>
+                  </div>
+                  <input
+                    type="range"
+                    id="alisSpeed"
+                    class="local-slider"
+                    min="0"
+                    max="100"
+                    value="50"
+                    disabled
+                  />
+                </div>
+              </div>
+
+              <div class="control-group">
+                <div class="slider-label-container">
+                  <label>BRIGHTNESS</label
+                  ><span id="alisBrightnessValue">--%</span>
+                </div>
+                <input
+                  type="range"
+                  id="alisBrightness"
+                  class="local-slider"
+                  min="0"
+                  max="100"
+                  value="80"
+                  disabled
+                />
+              </div>
+            </div>
+
+            <div id="shroud-controls" class="control-set"></div>
+            <div id="demon-controls" class="control-set"></div>
+
+            <div id="sein-controls" class="control-set">
+              <div class="static-color-section" style="display: block">
+                <div class="control-group">
+                  <label>WARNA SOLID</label>
+                  <div
+                    id="seinColorPreview"
+                    class="color-preview-box"
+                    title="Klik untuk mengubah warna"
+                  >
+                    <span id="seinColorHex" class="color-hex-value"
+                      >#RRGGBB</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="control-group">
+                <label>PILIH EFEK SEIN</label>
+                <select
+                  id="seinModeSettings"
+                  class="cyber-input"
+                  disabled
+                ></select>
+              </div>
+              <div class="control-group">
+                <div class="slider-label-container">
+                  <label>SPEED</label><span id="seinSpeedValue">--%</span>
+                </div>
+                <input
+                  type="range"
+                  id="seinSpeed"
+                  class="local-slider"
+                  min="0"
+                  max="100"
+                  value="50"
+                  disabled
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div id="tabPengaturan" class="tab-content">
+        <details class="cyber-panel" open>
+          <summary>
+            PRESET PENGATURAN<span class="accordion-icon">›</span>
+          </summary>
+          <div class="panel-body">
+            <div class="control-group">
+              <label for="presetSlot">PILIH SLOT PRESET</label>
+              <select id="presetSlot" class="cyber-input"></select>
+            </div>
+            <div class="control-group">
+              <label for="presetName">NAMA PRESET</label>
+              <input
+                type="text"
+                id="presetName"
+                class="cyber-input"
+                placeholder="Contoh: Mode Pameran"
+              />
+            </div>
+            <div class="modal-actions">
+              <button id="btnLoadPreset" class="btn">Muat Preset</button>
+              <button id="btnSavePreset" class="btn">Simpan Preset</button>
+            </div>
+          </div>
+        </details>
+        <details class="cyber-panel">
+          <summary>
+            PENGATURAN JUMLAH LED<span class="accordion-icon">›</span>
+          </summary>
+          <div class="panel-body">
+            <div class="control-group">
+              <label class="control-label">TARGET JUMLAH LED</label>
+              <div class="radio-group">
+                <input
+                  type="radio"
+                  id="ledTargetAlis"
+                  name="ledTarget"
+                  value="alis"
+                  checked
+                /><label for="ledTargetAlis">ALIS</label>
+                <input
+                  type="radio"
+                  id="ledTargetShroud"
+                  name="ledTarget"
+                  value="shroud"
+                /><label for="ledTargetShroud">SHROUD</label>
+                <input
+                  type="radio"
+                  id="ledTargetDemon"
+                  name="ledTarget"
+                  value="demon"
+                /><label for="ledTargetDemon">DEMON</label>
+                <input
+                  type="radio"
+                  id="ledTargetSein"
+                  name="ledTarget"
+                  value="sein"
+                /><label for="ledTargetSein">SEIN</label>
+              </div>
+            </div>
+            <div class="control-group">
+              <label for="ledCount">Jumlah LED (Per Sisi)</label>
+              <input
+                type="number"
+                id="ledCount"
+                min="0"
+                max="250"
+                class="cyber-input"
+                disabled
+              />
+            </div>
+            <div class="modal-actions">
+              <button id="btnPreviewLedCount" class="btn btn-secondary">
+                Preview
+              </button>
+              <button id="btnSaveLedCount" class="btn">Simpan</button>
+            </div>
+          </div>
+        </details>
+        <details class="cyber-panel">
+          <summary>
+            WELCOME ANIMATION<span class="accordion-icon">›</span>
+          </summary>
+          <div class="panel-body">
+            <div class="control-group">
+              <label for="welcomeMode">PILIH ANIMASI</label>
+              <select id="welcomeMode" class="cyber-input" disabled></select>
+            </div>
+            <div class="control-group">
+              <label for="welcomeDuration">DURASI (detik)</label>
+              <input
+                type="number"
+                id="welcomeDuration"
+                min="1"
+                max="60"
+                class="cyber-input"
+                disabled
+              />
+            </div>
+            <div class="modal-actions">
+              <button id="btnPreviewWelcome" class="btn btn-secondary">
+                Preview
+              </button>
+              <button id="btnSaveWelcome" class="btn">Simpan</button>
+            </div>
+          </div>
+        </details>
+        <details class="cyber-panel">
+          <summary>SISTEM<span class="accordion-icon">›</span></summary>
+          <div class="panel-body">
+            <p class="warning-text">
+              Aksi ini akan mengembalikan semua pengaturan ke default pabrikan
+              dan menghapus kredensial WiFi.
+            </p>
+            <button id="btnReset" class="btn btn-danger" disabled>
+              RESET PABRIK
+            </button>
+          </div>
+        </details>
+      </div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/service-worker.js")
+            .then((reg) => console.log("ServiceWorker registration successful"))
+            .catch((err) =>
+              console.log("ServiceWorker registration failed: ", err)
+            );
+        });
+      }
+    </script>
+  </body>
+</html>
