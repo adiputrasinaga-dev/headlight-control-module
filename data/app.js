@@ -125,8 +125,9 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     getControlSetHTML(sysKey) {
-      // ... (Tidak ada perubahan di fungsi ini)
       const sysName = sysKey.charAt(0).toUpperCase() + sysKey.slice(1);
+      // --- FASE 3.2: Tambahkan div untuk info panel ---
+      const panelInfoHTML = `<div class="panel-info"><span id="${sysKey}LedCountInfo">--</span> LED</div>`;
       const svgLeft =
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M15.25 4.75a.75.75 0 00-1.06 0L8.72 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L10.31 11l5.94-5.19a.75.75 0 000-1.06z"></path></svg>';
       const svgBoth =
@@ -135,6 +136,7 @@ document.addEventListener("DOMContentLoaded", () => {
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8.75 4.75a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L13.69 11l-5.94-5.19a.75.75 0 010-1.06z"></path></svg>';
       return `
           <div id="${sysKey}-controls" class="control-set">
+            ${panelInfoHTML} 
             <div class="control-group">
               <label class="control-label">TARGET</label>
               <div class="segmented-control" data-target-group="${sysKey}">
@@ -209,10 +211,22 @@ document.addEventListener("DOMContentLoaded", () => {
       this.elements.btnSaveAuthPin.addEventListener("click", () =>
         this.saveNewAuthPin()
       );
-      this.elements.syncSwitch.addEventListener(
-        "change",
-        (e) => (this.state.isSyncEnabled = e.target.checked)
-      );
+
+      this.elements.syncSwitch.addEventListener("change", (e) => {
+        this.state.isSyncEnabled = e.target.checked;
+        // --- FASE 3.1: Tambahkan/hapus kelas untuk efek visual ---
+        const syncClass = "synced-panel";
+        const panels = document.querySelectorAll(
+          "#alis-controls, #shroud-controls, #demon-controls"
+        );
+        if (this.state.isSyncEnabled) {
+          panels.forEach((p) => p.classList.add(syncClass));
+          this.showToast("Sinkronisasi Aktif", "info");
+        } else {
+          panels.forEach((p) => p.classList.remove(syncClass));
+        }
+      });
+
       this.elements.systemSelector.forEach((radio) =>
         radio.addEventListener("change", () => this.renderActiveControl())
       );
@@ -460,6 +474,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const config = this.state.appState[sys];
       const elements = this.elements[sys];
       if (!config || !elements || Object.keys(elements).length === 0) return;
+
+      // --- FASE 3.2: Isi nilai jumlah LED ---
+      const ledCountInfo = document.getElementById(`${sys}LedCountInfo`);
+      if (ledCountInfo) {
+        ledCountInfo.textContent = config.ledCount;
+      }
 
       elements.brightness.value = config.brightness;
       elements.brightnessValue.textContent = `${config.brightness}%`;
