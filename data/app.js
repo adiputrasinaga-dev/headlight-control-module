@@ -244,10 +244,24 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     bindControlEvents(sys) {
-      const debouncedUpdate = this.util.debounce(
-        (payload) => this.api.post(`/set-mode-${sys}`, payload),
-        this.config.debounceDelay
-      );
+      const debouncedUpdate = this.util.debounce((payload) => {
+        // Cek jika sinkronisasi aktif dan sistem ini adalah bagian dari yang bisa disinkronkan
+        if (this.state.isSyncEnabled && this.config.systems.includes(sys)) {
+          // Kirim pembaruan ke semua sistem yang bisa disinkronkan
+          this.config.systems.forEach((targetSys) => {
+            this.api.post(`/set-mode-${targetSys}`, payload);
+          });
+          this.showToast(
+            "Pengaturan disinkronkan ke Alis, Shroud, & Demon",
+            "info"
+          );
+          // Muat ulang state setelah beberapa saat untuk memastikan UI terupdate
+          setTimeout(() => this.fetchInitialState(), 500);
+        } else {
+          // Jika sinkronisasi mati, hanya perbarui sistem saat ini
+          this.api.post(`/set-mode-${sys}`, payload);
+        }
+      }, this.config.debounceDelay);
 
       const elements = this.elements[sys];
       if (!elements || Object.keys(elements).length === 0) return;
@@ -667,14 +681,36 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      this.api.post(endpoint, payload).then(() => {
-        this.showToast(
-          `${activeSystemForModal.toUpperCase()} warna diperbarui`,
-          "success"
-        );
-        this.fetchInitialState();
-        this.elements.colorPickerModal.backdrop.style.display = "none";
-      });
+      // Cek apakah sistem ini bisa disinkronkan dan apakah mode sinkronisasi aktif
+      const isSyncableSystem =
+        this.config.systems.includes(activeSystemForModal);
+      if (this.state.isSyncEnabled && isSyncableSystem) {
+        // Jika ya, kirim payload ke semua sistem
+        const updatePromises = this.config.systems.map((targetSys) => {
+          const syncEndpoint = `/set-mode-${targetSys}`;
+          return this.api.post(syncEndpoint, payload);
+        });
+
+        Promise.all(updatePromises)
+          .then(() => {
+            this.showToast("Warna berhasil disinkronkan", "success");
+            this.fetchInitialState(); // Muat ulang state untuk memperbarui UI
+            this.elements.colorPickerModal.backdrop.style.display = "none";
+          })
+          .catch((err) => {
+            this.showToast(`Gagal sinkronisasi: ${err.message}`, "error");
+          });
+      } else {
+        // Jika tidak, kirim hanya ke sistem yang aktif
+        this.api.post(endpoint, payload).then(() => {
+          this.showToast(
+            `${activeSystemForModal.toUpperCase()} warna diperbarui`,
+            "success"
+          );
+          this.fetchInitialState();
+          this.elements.colorPickerModal.backdrop.style.display = "none";
+        });
+      }
     },
 
     closeResetModal() {
