@@ -1,12 +1,22 @@
 /*
  * ===================================================================
- * AERI LIGHT v17.2 - STYLESHEET FINAL
+ * AERI LIGHT v18.1 - STYLESHEET (UI BUG FIXES)
  * ===================================================================
- * Deskripsi Perubahan:
- * 1.  Dark/Light Mode: Menambahkan variabel warna untuk kedua tema.
- * 2.  Theme Switcher: CSS untuk toggle switch tema baru.
- * 3.  Perbaikan Minor: Merapikan beberapa properti dan menambahkan
- * style untuk elemen baru seperti divider dan small text.
+ * Rilis Perbaikan oleh Fullstack & UI/UX Expert
+ *
+ * DESKRIPSI PERBAIKAN:
+ * 1.  [BUG FIX] Celah pada Tombol Tipe Efek:
+ * - Aturan styling untuk .radio-group dan .segmented-control telah
+ * disempurnakan untuk memastikan tidak ada "potongan" atau celah
+ * visual saat segmen kanan aktif. Bentuk kini sepenuhnya
+ * dikontrol oleh parent container.
+ *
+ * 2.  [BUG FIX] Jarak Vertikal Tidak Konsisten:
+ * - Margin eksplisit ditambahkan untuk menonaktifkan spasi yang tidak
+ * diinginkan pada .effect-details-wrapper. Spasi antar elemen
+ * kini sepenuhnya dikontrol oleh properti 'gap' pada flex container,
+ * mencegah layout "melompat".
+ *
  * ===================================================================
  */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700&display=swap");
@@ -227,10 +237,6 @@ details[open] > summary {
   flex-direction: column;
 }
 
-/* TAMBAHKAN ATURAN BARU DI BAWAHNYA */
-.panel-body > *:not(:first-child) {
-  margin-top: 30px;
-}
 .control-group {
   display: flex;
   flex-direction: column;
@@ -264,6 +270,13 @@ details[open] > summary {
 .control-set.active {
   display: flex;
 }
+
+/* ### BUG FIX: Spasi Vertikal ### */
+/* Mengatur margin wrapper secara eksplisit untuk mencegah lompatan layout */
+.effect-details-wrapper {
+  margin: 0;
+}
+/* ############################## */
 
 .btn {
   background-color: transparent;
@@ -353,12 +366,14 @@ input:focus {
   box-shadow: 0 0 10px var(--secondary-glow);
 }
 
+/* ### BUG FIX: Celah Tombol ### */
+/* Bentuk dikontrol oleh parent, anak-anaknya hanya mengisi ruang */
 .radio-group,
 .segmented-control {
   display: flex;
   border: 1px solid var(--border-color);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
-  overflow: hidden;
+  overflow: hidden; /* Penting untuk memotong anak-anaknya */
 }
 .radio-group label,
 .segmented-control .sg-btn {
@@ -369,7 +384,8 @@ input:focus {
   font-weight: 700;
   transition: all 0.2s ease-in-out;
   background-color: transparent;
-  border: none;
+  border: none; /* Tidak ada border individu */
+  border-radius: 0; /* Tidak ada radius individu */
   color: var(--text-muted);
 }
 .radio-group input[type="radio"],
@@ -382,10 +398,13 @@ input:focus {
   color: var(--bg-color);
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
 }
+/* Hanya tambahkan garis pemisah, bukan border penuh */
 .radio-group label:not(:last-of-type),
 .segmented-control .sg-btn:not(:last-of-type) {
   border-right: 1px solid var(--border-color);
 }
+/* ############################## */
+
 .segmented-control .sg-btn svg {
   width: 24px;
   height: 24px;
@@ -501,7 +520,7 @@ input:checked + .slider:before {
   height: 100%;
   background-color: rgba(0, 0, 0, 0.8);
   z-index: 5000;
-  display: flex;
+  display: none; /* Default to hidden */
   justify-content: center;
   align-items: center;
   backdrop-filter: blur(5px);
@@ -732,7 +751,7 @@ input:checked + .slider:before {
   color: var(--secondary-accent);
 }
 
-/* FASE 2.2: Styling untuk kontainer pratinjau preset */
+/* Preset Preview Styling */
 .preset-preview-container {
   background-color: rgba(0, 0, 0, 0.2);
   border-left: 3px solid var(--secondary-accent);
@@ -771,7 +790,6 @@ input:checked + .slider:before {
   transition: all 0.4s ease-in-out;
 }
 
-/* FASE 3.2: Styling untuk info jumlah LED */
 .panel-info {
   position: absolute;
   top: 15px;
