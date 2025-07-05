@@ -126,7 +126,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     getControlSetHTML(sysKey) {
       const sysName = sysKey.charAt(0).toUpperCase() + sysKey.slice(1);
-      // --- FASE 3.2: Tambahkan div untuk info panel ---
       const panelInfoHTML = `<div class="panel-info"><span id="${sysKey}LedCountInfo">--</span> LED</div>`;
       const svgLeft =
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M15.25 4.75a.75.75 0 00-1.06 0L8.72 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L10.31 11l5.94-5.19a.75.75 0 000-1.06z"></path></svg>';
@@ -152,21 +151,25 @@ document.addEventListener("DOMContentLoaded", () => {
                   <input type="radio" id="${sysKey}EffectTypeDynamic" name="${sysKey}EffectType" value="dynamic"/><label for="${sysKey}EffectTypeDynamic">Dinamis</label>
               </div>
             </div>
-            <div class="static-color-section">
-              <div class="control-group">
-                <label>WARNA SOLID</label>
-                <div id="${sysKey}ColorPreviewStatic" class="color-preview-box" title="Klik untuk mengubah warna"><span id="${sysKey}ColorHexStatic" class="color-hex-value">#RRGGBB</span></div>
-              </div>
+
+            <div class="effect-details-wrapper">
+                <div class="static-color-section">
+                    <div class="control-group">
+                        <label>WARNA SOLID</label>
+                        <div id="${sysKey}ColorPreviewStatic" class="color-preview-box" title="Klik untuk mengubah warna"><span id="${sysKey}ColorHexStatic" class="color-hex-value">#RRGGBB</span></div>
+                    </div>
+                </div>
+                <div class="dynamic-controls">
+                    <div class="dynamic-color-previews-container">
+                        <div class="control-group" id="${sysKey}-dynamic-color-group-1" style="display: none;"><label>WARNA 1</label><div id="${sysKey}ColorPreviewDynamic1" class="color-preview-box" title="Klik untuk mengubah Warna 1"><span id="${sysKey}ColorHexDynamic1" class="color-hex-value">#RRGGBB</span></div></div>
+                        <div class="control-group" id="${sysKey}-dynamic-color-group-2" style="display: none;"><label>WARNA 2</label><div id="${sysKey}ColorPreviewDynamic2" class="color-preview-box" title="Klik untuk mengubah Warna 2"><span id="${sysKey}ColorHexDynamic2" class="color-hex-value">#RRGGBB</span></div></div>
+                        <div class="control-group" id="${sysKey}-dynamic-color-group-3" style="display: none;"><label>WARNA 3</label><div id="${sysKey}ColorPreviewDynamic3" class="color-preview-box" title="Klik untuk mengubah Warna 3"><span id="${sysKey}ColorHexDynamic3" class="color-hex-value">#RRGGBB</span></div></div>
+                    </div>
+                    <div class="control-group"><label>MODE EFEK</label><select id="${sysKey}Mode" class="cyber-input" disabled></select></div>
+                    <div class="control-group speed-group"><div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div><input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" disabled /></div>
+                </div>
             </div>
-            <div class="dynamic-controls">
-              <div class="dynamic-color-previews-container">
-                  <div class="control-group" id="${sysKey}-dynamic-color-group-1" style="display: none;"><label>WARNA 1</label><div id="${sysKey}ColorPreviewDynamic1" class="color-preview-box" title="Klik untuk mengubah Warna 1"><span id="${sysKey}ColorHexDynamic1" class="color-hex-value">#RRGGBB</span></div></div>
-                  <div class="control-group" id="${sysKey}-dynamic-color-group-2" style="display: none;"><label>WARNA 2</label><div id="${sysKey}ColorPreviewDynamic2" class="color-preview-box" title="Klik untuk mengubah Warna 2"><span id="${sysKey}ColorHexDynamic2" class="color-hex-value">#RRGGBB</span></div></div>
-                  <div class="control-group" id="${sysKey}-dynamic-color-group-3" style="display: none;"><label>WARNA 3</label><div id="${sysKey}ColorPreviewDynamic3" class="color-preview-box" title="Klik untuk mengubah Warna 3"><span id="${sysKey}ColorHexDynamic3" class="color-hex-value">#RRGGBB</span></div></div>
-              </div>
-              <div class="control-group"><label>MODE EFEK</label><select id="${sysKey}Mode" class="cyber-input" disabled></select></div>
-              <div class="control-group speed-group"><div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div><input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" disabled /></div>
-            </div>
+            
             <div class="control-group"><div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div><input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" disabled /></div>
           </div>`;
     },
@@ -295,9 +298,9 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     bindControlEvents(sys) {
-      const debouncedUpdate = this.util.debounce((payload) => {
+      // Fungsi ini sekarang menjadi fungsi pembaruan instan untuk aksi diskrit
+      const instantUpdate = (payload) => {
         const updateAndRender = (targetSystem, data) => {
-          // Update state lokal
           Object.assign(this.state.appState[targetSystem], data);
           if (data.mode !== undefined) {
             this.state.appState[targetSystem].stateKiri.modeEfek = data.mode;
@@ -320,62 +323,65 @@ document.addEventListener("DOMContentLoaded", () => {
             updateAndRender(sys, payload);
           });
         }
-      }, this.config.debounceDelay);
+      };
+
+      // Buat versi debounced dari fungsi HANYA untuk kontrol kontinu (slider)
+      const debouncedUpdate = this.util.debounce(
+        instantUpdate,
+        this.config.debounceDelay
+      );
 
       const elements = this.elements[sys];
       if (!elements || Object.keys(elements).length === 0) return;
 
-      // --- PERBAIKAN FITUR TARGET DIMULAI DI SINI ---
+      // --- AKSI DISKRIT: Gunakan instantUpdate ---
+
+      // Tombol Target
       const targetButtons = document.querySelectorAll(
         `[data-target-group="${sys}"] .sg-btn`
       );
       targetButtons.forEach((button) => {
         button.addEventListener("click", () => {
-          // 1. Hapus kelas 'active' dari semua tombol di grup yang sama
-          targetButtons.forEach((btn) => btn.classList.remove("active"));
-          // 2. Tambahkan kelas 'active' ke tombol yang diklik
-          button.classList.add("active");
-          // 3. Dapatkan nilai target baru (misal: 'kiri', 'kanan', 'keduanya')
           const newTarget = button.dataset.value;
-          // 4. Kirim pembaruan target ke perangkat
-          debouncedUpdate({ target: newTarget });
-          this.showToast(
-            `${
-              sys.charAt(0).toUpperCase() + sys.slice(1)
-            } target diubah ke ${newTarget}`,
-            "info"
-          );
+          instantUpdate({ target: newTarget }); // <-- Gunakan pembaruan instan
         });
       });
-      // --- PERBAIKAN FITUR TARGET SELESAI ---
 
+      // Tombol Tipe Efek
       document
         .querySelectorAll(`input[name="${sys}EffectType"]`)
         .forEach((radio) => {
           radio.addEventListener("change", (e) => {
             this.updateEffectTypeUI(sys);
             if (e.target.value === "static") {
-              debouncedUpdate({ mode: 0 });
+              instantUpdate({ mode: 0 }); // <-- Gunakan pembaruan instan
             }
           });
         });
 
+      // Dropdown Mode Efek
+      elements.mode.addEventListener("change", (e) => {
+        this.updateDynamicColorPreviews(sys, e.target.value);
+        instantUpdate({ mode: parseInt(e.target.value, 10) }); // <-- Gunakan pembaruan instan
+      });
+
+      // --- AKSI KONTINU: Gunakan debouncedUpdate ---
+
+      // Slider Kecerahan
       elements.brightness.addEventListener("input", () => {
         elements.brightnessValue.textContent = `${elements.brightness.value}%`;
         debouncedUpdate({
           brightness: parseInt(elements.brightness.value, 10),
         });
       });
+
+      // Slider Kecepatan
       elements.speed.addEventListener("input", () => {
         elements.speedValue.textContent = `${elements.speed.value}%`;
         debouncedUpdate({ speed: parseInt(elements.speed.value, 10) });
       });
 
-      elements.mode.addEventListener("change", (e) => {
-        this.updateDynamicColorPreviews(sys, e.target.value);
-        debouncedUpdate({ mode: parseInt(e.target.value, 10) });
-      });
-
+      // Event listener untuk Color Picker tidak berubah
       elements.colorPreviewStatic.addEventListener("click", () =>
         this.openColorPicker(sys, 1, "static")
       );
@@ -477,12 +483,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- UI & UX ---
     renderUI() {
-      // ... (Tidak ada perubahan di fungsi ini)
       if (!this.state.appState || Object.keys(this.state.appState).length === 0)
         return;
+
+      // --- PERBAIKAN DIMULAI DI SINI ---
+      // Baris yang menonaktifkan kontrol saat isDemoMode aktif telah dihapus.
+      // Sekarang, kontrol akan selalu aktif baik dalam mode terhubung maupun mode uji.
       document.querySelectorAll("input, select, button").forEach((el) => {
-        if (!el.closest(".modal-content")) el.disabled = this.state.isDemoMode;
+        if (!el.closest(".modal-content")) {
+          // Kita hanya akan menonaktifkan elemen jika koneksi benar-benar GAGAL,
+          // bukan hanya karena sedang dalam Mode Uji.
+          el.disabled = this.state.isDemoMode && !this.state.appState;
+        }
       });
+      // --- PERBAIKAN SELESAI ---
 
       this.config.systems.forEach((sys) => this.renderSystem(sys));
       this.renderSein();
@@ -493,12 +507,22 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     renderSystem(sys) {
-      // ... (Tidak ada perubahan di fungsi ini)
       const config = this.state.appState[sys];
       const elements = this.elements[sys];
       if (!config || !elements || Object.keys(elements).length === 0) return;
 
-      // --- FASE 3.2: Isi nilai jumlah LED ---
+      // Logika ini membaca state dan mengatur kelas '.active' dengan benar.
+      const currentTarget = config.target || "keduanya";
+      const targetButtons = document.querySelectorAll(
+        `[data-target-group="${sys}"] .sg-btn`
+      );
+      targetButtons.forEach((button) => {
+        button.classList.remove("active");
+        if (button.dataset.value === currentTarget) {
+          button.classList.add("active");
+        }
+      });
+
       const ledCountInfo = document.getElementById(`${sys}LedCountInfo`);
       if (ledCountInfo) {
         ledCountInfo.textContent = config.ledCount;

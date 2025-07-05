@@ -225,7 +225,11 @@ details[open] > summary {
 .panel-body {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+}
+
+/* TAMBAHKAN ATURAN BARU DI BAWAHNYA */
+.panel-body > *:not(:first-child) {
+  margin-top: 30px;
 }
 .control-group {
   display: flex;
