@@ -1,15 +1,15 @@
 /*
  * ===================================================================
- * AERI LIGHT v17.2 - APP.JS FINAL (LENGKAP DAN UTUH)
+ * AERI LIGHT v17.2 - APP.JS (Setelah Implementasi Fase 1 & 2)
  * ===================================================================
  * Deskripsi Perubahan:
- * 1.  Implementasi Penuh: Semua fungsi, termasuk yang sebelumnya kosong, kini telah
- * diisi dengan logika yang benar dan fungsional.
- * 2.  Inisialisasi iro.js: Color picker diinisialisasi dengan benar.
- * 3.  Refactor: Logika utilitas (debounce, rgbToHex) dipindahkan ke dalam
- * sub-objek `App.util` untuk kerapian.
- * 4.  Stabilitas: Menambahkan pemeriksaan null-safety untuk elemen dinamis
- * untuk mencegah error.
+ * - FASE 1.1: Logika "Sinkronkan" ditambahkan pada `bindControlEvents` dan `handleColorPickerSave`.
+ * - FASE 1.2: Konteks ('static'/'dynamic') ditambahkan pada `openColorPicker` untuk mencegah bug mode.
+ * - FASE 1.3: Optimasi dengan menghapus `fetchInitialState()` berlebih dan menggantinya dengan
+ * pembaruan state lokal untuk responsivitas yang lebih baik.
+ * - FASE 2.1: Manajemen PIN dirombak. `localStorage` dihapus, menjadikan ESP32 sebagai
+ * satu-satunya sumber kebenaran (meski implementasi penuh butuh perubahan firmware).
+ * - FASE 2.2: Logika untuk menampilkan pratinjau preset ditambahkan di `bindEvents`.
  * ===================================================================
  */
 document.addEventListener("DOMContentLoaded", () => {
@@ -20,12 +20,13 @@ document.addEventListener("DOMContentLoaded", () => {
       isDemoMode: false,
       activeSystemForModal: null,
       activeColorSlot: 1,
+      activeColorContext: "static", // Konteks: 'static' atau 'dynamic'
       activeToastTimer: null,
-      authPin: "",
+      authPin: "", // Dikosongkan, diisi manual oleh pengguna
       appState: {},
     },
     config: {
-      debounceDelay: 200, // Penundaan dalam ms untuk mengirim data slider
+      debounceDelay: 250, // Penundaan dinaikkan sedikit untuk stabilitas
       systems: ["alis", "shroud", "demon"],
       modeOptions: {
         static: [{ name: "Static", value: 0, colorSlots: 1 }],
@@ -53,8 +54,8 @@ document.addEventListener("DOMContentLoaded", () => {
       },
     },
 
-    elements: {}, // Cache untuk elemen DOM
-    modalColorPicker: null, // Placeholder untuk iro.js
+    elements: {},
+    modalColorPicker: null,
 
     // --- INISIALISASI ---
     init() {
@@ -73,13 +74,14 @@ document.addEventListener("DOMContentLoaded", () => {
       this.cacheDynamicElements();
       this.bindEvents();
       this.loadTheme();
-      this.loadPin();
+      // this.loadPin(); // Dihapus, PIN tidak lagi dimuat dari localStorage
       this.populateDropdowns();
       this.fetchInitialState();
     },
 
     // --- PENGATURAN AWAL & PEMBUATAN UI ---
     cacheInitialElements() {
+      // ... (Tidak ada perubahan di fungsi ini)
       this.elements = {
         toastContainer: document.getElementById("toast-container"),
         themeSwitcher: document.getElementById("theme-switcher"),
@@ -111,6 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     generateControlTemplates() {
+      // ... (Tidak ada perubahan di fungsi ini)
       this.config.systems.forEach((sysKey) => {
         const container = document.getElementById(
           `${sysKey}-controls-container`
@@ -122,6 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     getControlSetHTML(sysKey) {
+      // ... (Tidak ada perubahan di fungsi ini)
       const sysName = sysKey.charAt(0).toUpperCase() + sysKey.slice(1);
       const svgLeft =
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M15.25 4.75a.75.75 0 00-1.06 0L8.72 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L10.31 11l5.94-5.19a.75.75 0 000-1.06z"></path></svg>';
@@ -130,42 +134,43 @@ document.addEventListener("DOMContentLoaded", () => {
       const svgRight =
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8.75 4.75a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L13.69 11l-5.94-5.19a.75.75 0 010-1.06z"></path></svg>';
       return `
-        <div id="${sysKey}-controls" class="control-set">
-          <div class="control-group">
-            <label class="control-label">TARGET</label>
-            <div class="segmented-control" data-target-group="${sysKey}">
-              <button class="sg-btn" data-value="kiri" title="Hanya Kiri">${svgLeft}</button>
-              <button class="sg-btn active" data-value="keduanya" title="Kiri & Kanan">${svgBoth}</button>
-              <button class="sg-btn" data-value="kanan" title="Hanya Kanan">${svgRight}</button>
-            </div>
-          </div>
-          <div class="control-group">
-            <label class="control-label">TIPE EFEK</label>
-            <div class="radio-group" data-type-group="${sysKey}">
-                <input type="radio" id="${sysKey}EffectTypeStatic" name="${sysKey}EffectType" value="static" checked/><label for="${sysKey}EffectTypeStatic">Statis</label>
-                <input type="radio" id="${sysKey}EffectTypeDynamic" name="${sysKey}EffectType" value="dynamic"/><label for="${sysKey}EffectTypeDynamic">Dinamis</label>
-            </div>
-          </div>
-          <div class="static-color-section">
+          <div id="${sysKey}-controls" class="control-set">
             <div class="control-group">
-              <label>WARNA SOLID</label>
-              <div id="${sysKey}ColorPreviewStatic" class="color-preview-box" title="Klik untuk mengubah warna"><span id="${sysKey}ColorHexStatic" class="color-hex-value">#RRGGBB</span></div>
+              <label class="control-label">TARGET</label>
+              <div class="segmented-control" data-target-group="${sysKey}">
+                <button class="sg-btn" data-value="kiri" title="Hanya Kiri">${svgLeft}</button>
+                <button class="sg-btn active" data-value="keduanya" title="Kiri & Kanan">${svgBoth}</button>
+                <button class="sg-btn" data-value="kanan" title="Hanya Kanan">${svgRight}</button>
+              </div>
             </div>
-          </div>
-          <div class="dynamic-controls">
-            <div class="dynamic-color-previews-container">
-                <div class="control-group" id="${sysKey}-dynamic-color-group-1" style="display: none;"><label>WARNA 1</label><div id="${sysKey}ColorPreviewDynamic1" class="color-preview-box" title="Klik untuk mengubah Warna 1"><span id="${sysKey}ColorHexDynamic1" class="color-hex-value">#RRGGBB</span></div></div>
-                <div class="control-group" id="${sysKey}-dynamic-color-group-2" style="display: none;"><label>WARNA 2</label><div id="${sysKey}ColorPreviewDynamic2" class="color-preview-box" title="Klik untuk mengubah Warna 2"><span id="${sysKey}ColorHexDynamic2" class="color-hex-value">#RRGGBB</span></div></div>
-                <div class="control-group" id="${sysKey}-dynamic-color-group-3" style="display: none;"><label>WARNA 3</label><div id="${sysKey}ColorPreviewDynamic3" class="color-preview-box" title="Klik untuk mengubah Warna 3"><span id="${sysKey}ColorHexDynamic3" class="color-hex-value">#RRGGBB</span></div></div>
+            <div class="control-group">
+              <label class="control-label">TIPE EFEK</label>
+              <div class="radio-group" data-type-group="${sysKey}">
+                  <input type="radio" id="${sysKey}EffectTypeStatic" name="${sysKey}EffectType" value="static" checked/><label for="${sysKey}EffectTypeStatic">Statis</label>
+                  <input type="radio" id="${sysKey}EffectTypeDynamic" name="${sysKey}EffectType" value="dynamic"/><label for="${sysKey}EffectTypeDynamic">Dinamis</label>
+              </div>
             </div>
-            <div class="control-group"><label>MODE EFEK</label><select id="${sysKey}Mode" class="cyber-input" disabled></select></div>
-            <div class="control-group speed-group"><div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div><input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" disabled /></div>
-          </div>
-          <div class="control-group"><div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div><input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" disabled /></div>
-        </div>`;
+            <div class="static-color-section">
+              <div class="control-group">
+                <label>WARNA SOLID</label>
+                <div id="${sysKey}ColorPreviewStatic" class="color-preview-box" title="Klik untuk mengubah warna"><span id="${sysKey}ColorHexStatic" class="color-hex-value">#RRGGBB</span></div>
+              </div>
+            </div>
+            <div class="dynamic-controls">
+              <div class="dynamic-color-previews-container">
+                  <div class="control-group" id="${sysKey}-dynamic-color-group-1" style="display: none;"><label>WARNA 1</label><div id="${sysKey}ColorPreviewDynamic1" class="color-preview-box" title="Klik untuk mengubah Warna 1"><span id="${sysKey}ColorHexDynamic1" class="color-hex-value">#RRGGBB</span></div></div>
+                  <div class="control-group" id="${sysKey}-dynamic-color-group-2" style="display: none;"><label>WARNA 2</label><div id="${sysKey}ColorPreviewDynamic2" class="color-preview-box" title="Klik untuk mengubah Warna 2"><span id="${sysKey}ColorHexDynamic2" class="color-hex-value">#RRGGBB</span></div></div>
+                  <div class="control-group" id="${sysKey}-dynamic-color-group-3" style="display: none;"><label>WARNA 3</label><div id="${sysKey}ColorPreviewDynamic3" class="color-preview-box" title="Klik untuk mengubah Warna 3"><span id="${sysKey}ColorHexDynamic3" class="color-hex-value">#RRGGBB</span></div></div>
+              </div>
+              <div class="control-group"><label>MODE EFEK</label><select id="${sysKey}Mode" class="cyber-input" disabled></select></div>
+              <div class="control-group speed-group"><div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div><input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" disabled /></div>
+            </div>
+            <div class="control-group"><div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div><input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" disabled /></div>
+          </div>`;
     },
 
     getSeinControlHTML() {
+      // ... (Tidak ada perubahan di fungsi ini)
       return `
         <div id="sein-controls" class="control-set">
             <div class="static-color-section" style="display: block;">
@@ -177,6 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     cacheDynamicElements() {
+      // ... (Tidak ada perubahan di fungsi ini)
       const allSystems = [...this.config.systems, "sein"];
       allSystems.forEach((sys) => {
         this.elements[sys] = {};
@@ -192,7 +198,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     bindEvents() {
-      // Event listener statis
+      // ... (Tidak ada perubahan signifikan di sini kecuali penambahan listener untuk preset)
       this.elements.themeSwitcher.addEventListener("change", () =>
         this.toggleTheme()
       );
@@ -241,35 +247,62 @@ document.addEventListener("DOMContentLoaded", () => {
       // Event listener untuk elemen dinamis
       this.config.systems.forEach((sys) => this.bindControlEvents(sys));
       this.bindSeinEvents();
+
+      // --- FASE 2.2: Event listener untuk pratinjau preset ---
+      const presetSlotSelect = document.getElementById("presetSlot");
+      const presetPreviewContainer = document.getElementById("preset-preview");
+
+      presetSlotSelect.addEventListener("change", async (e) => {
+        const slot = e.target.value;
+        if (!slot) {
+          presetPreviewContainer.innerHTML =
+            "<p>Pilih slot untuk melihat pratinjau...</p>";
+          return;
+        }
+
+        presetPreviewContainer.innerHTML = "<p>Memuat pratinjau...</p>";
+
+        try {
+          const response = await fetch(`/get-preset-details?slot=${slot}`);
+          if (!response.ok) throw new Error("Preset kosong atau gagal dimuat");
+
+          const presetData = await response.json();
+
+          presetPreviewContainer.innerHTML = `
+                      <h4>Pratinjau: "${
+                        presetData.name || `Preset ${slot}`
+                      }"</h4>
+                      <p>${presetData.summary || "Tidak ada ringkasan."}</p>
+                  `;
+        } catch (error) {
+          presetPreviewContainer.innerHTML = `<p class="error-text">${error.message}</p>`;
+        }
+      });
     },
 
     bindControlEvents(sys) {
+      // --- FASE 1.1 & 1.3 ---
       const debouncedUpdate = this.util.debounce((payload) => {
-        // Fungsi untuk mengupdate state lokal dan me-render ulang komponen
         const updateAndRender = (targetSystem, data) => {
-          // Update state lokal (ini adalah contoh sederhana, bisa dibuat lebih kompleks)
-          // Untuk slider, kita langsung update nilai utamanya
           Object.assign(this.state.appState[targetSystem], data);
-          // Render ulang hanya sistem yang berubah
+          if (data.mode !== undefined) {
+            this.state.appState[targetSystem].stateKiri.modeEfek = data.mode;
+          }
           this.renderSystem(targetSystem);
         };
 
         if (this.state.isSyncEnabled && this.config.systems.includes(sys)) {
-          // Sinkronisasi
           const updatePromises = this.config.systems.map((targetSys) =>
             this.api.post(`/set-mode-${targetSys}`, payload)
           );
           Promise.all(updatePromises).then(() => {
             this.showToast("Pengaturan disinkronkan", "info");
-            // Update state lokal untuk semua sistem yang disinkronkan
             this.config.systems.forEach((targetSys) =>
               updateAndRender(targetSys, payload)
             );
           });
         } else {
-          // Update tunggal
           this.api.post(`/set-mode-${sys}`, payload).then(() => {
-            // Update state lokal hanya untuk sistem saat ini
             updateAndRender(sys, payload);
           });
         }
@@ -283,7 +316,6 @@ document.addEventListener("DOMContentLoaded", () => {
         .forEach((radio) => {
           radio.addEventListener("change", (e) => {
             this.updateEffectTypeUI(sys);
-            // Jika beralih ke statis, kirim mode: 0
             if (e.target.value === "static") {
               debouncedUpdate({ mode: 0 });
             }
@@ -306,6 +338,7 @@ document.addEventListener("DOMContentLoaded", () => {
         debouncedUpdate({ mode: parseInt(e.target.value, 10) });
       });
 
+      // --- FASE 1.2: Menambahkan konteks ---
       elements.colorPreviewStatic.addEventListener("click", () =>
         this.openColorPicker(sys, 1, "static")
       );
@@ -321,6 +354,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     bindSeinEvents() {
+      // ... (Tidak ada perubahan signifikan di fungsi ini)
       const seinElements = this.elements.sein;
       if (!seinElements || !seinElements.controls) return;
       const debouncedUpdate = this.util.debounce(
@@ -335,13 +369,15 @@ document.addEventListener("DOMContentLoaded", () => {
         seinElements.speedValue.textContent = `${seinElements.speed.value}%`;
         debouncedUpdate({ speed: seinElements.speed.value });
       });
-      seinElements.colorPreview.addEventListener("click", () =>
-        this.openColorPicker("sein", 1)
+      seinElements.colorPreview.addEventListener(
+        "click",
+        () => this.openColorPicker("sein", 1, "static") // Konteks 'sein' selalu 'static'
       );
     },
 
     // --- API & DATA ---
     api: {
+      // ... (Tidak ada perubahan di fungsi ini)
       post: async (endpoint, body) => {
         if (App.state.isDemoMode) {
           console.log("DEMO MODE POST:", endpoint, body);
@@ -375,17 +411,16 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     async fetchInitialState() {
+      // --- FASE 2.1: Modifikasi untuk tidak lagi memuat PIN dari localStorage ---
       try {
         const response = await fetch("/get-state");
         if (!response.ok) throw new Error("Koneksi gagal");
         const data = await response.json();
         this.state.appState = data;
-        // Gunakan PIN dari localStorage jika ada, jika tidak gunakan dari device, fallback ke default
-        this.state.authPin =
-          localStorage.getItem("aeriAuthPin") ||
-          data.authPinDefault ||
-          "123456";
-        this.elements.authPinInput.value = this.state.authPin;
+
+        // Input PIN kini dikosongkan saat load, menunggu input manual pengguna
+        this.elements.authPinInput.value = "";
+        this.state.authPin = "";
 
         this.state.isDemoMode = false;
         this.updateConnectionStatus(true);
@@ -405,6 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- UI & UX ---
     renderUI() {
+      // ... (Tidak ada perubahan di fungsi ini)
       if (!this.state.appState || Object.keys(this.state.appState).length === 0)
         return;
       document.querySelectorAll("input, select, button").forEach((el) => {
@@ -420,6 +456,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     renderSystem(sys) {
+      // ... (Tidak ada perubahan di fungsi ini)
       const config = this.state.appState[sys];
       const elements = this.elements[sys];
       if (!config || !elements || Object.keys(elements).length === 0) return;
@@ -451,6 +488,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     renderSein() {
+      // ... (Tidak ada perubahan di fungsi ini)
       const seinConfig = this.state.appState.sein;
       const seinElements = this.elements.sein;
       if (!seinConfig || !seinElements || !seinElements.controls) return;
@@ -465,6 +503,7 @@ document.addEventListener("DOMContentLoaded", () => {
       seinElements.colorHex.textContent = hex;
     },
 
+    // ... Sisa fungsi render tidak berubah ...
     renderWelcomeSettings() {
       const welcomeConfig = this.state.appState.global;
       const welcomeModeSelect = document.getElementById("welcomeMode");
@@ -580,6 +619,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- MANAJEMEN TEMA & PIN ---
     toggleTheme() {
+      // ... (Tidak ada perubahan di fungsi ini)
       const newTheme = this.elements.themeSwitcher.checked ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", newTheme);
       localStorage.setItem("aeriTheme", newTheme);
@@ -587,6 +627,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     loadTheme() {
+      // ... (Tidak ada perubahan di fungsi ini)
       const savedTheme = localStorage.getItem("aeriTheme") || "dark";
       document.documentElement.setAttribute("data-theme", savedTheme);
       this.elements.themeSwitcher.checked = savedTheme === "light";
@@ -594,6 +635,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     updateThemeMeta() {
+      // ... (Tidak ada perubahan di fungsi ini)
       setTimeout(() => {
         const themeColor = getComputedStyle(document.documentElement)
           .getPropertyValue("--primary-accent")
@@ -603,26 +645,39 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     loadPin() {
-      this.state.authPin = localStorage.getItem("aeriAuthPin") || "123456";
-      this.elements.authPinInput.value = this.state.authPin;
+      // --- FASE 2.1: Fungsi ini sengaja dikosongkan ---
+      console.log("PIN management is now handled by the user input directly.");
     },
 
     saveNewAuthPin() {
-      const newPin = prompt("Masukkan PIN baru (6 digit):", this.state.authPin);
+      // --- FASE 2.1: Logika baru untuk menyimpan PIN ---
+      const currentPin =
+        this.state.authPin ||
+        prompt("Untuk keamanan, masukkan PIN Anda saat ini:", "");
+      if (currentPin === null) return;
+
+      const newPin = prompt("Masukkan PIN baru (6 digit angka):", "");
       if (!newPin || newPin.length !== 6 || isNaN(newPin)) {
         this.showToast("PIN baru tidak valid. Harus 6 digit angka.", "error");
         return;
       }
-      this.api.post("/update-auth", { newPin }).then(() => {
-        localStorage.setItem("aeriAuthPin", newPin);
-        this.state.authPin = newPin; // Perbarui state internal
-        this.elements.authPinInput.value = newPin;
-        this.showToast("PIN berhasil diperbarui.", "success");
-      });
+
+      // Asumsi endpoint baru di firmware adalah /update-auth
+      this.api
+        .post("/update-auth", { currentPin, newPin })
+        .then(() => {
+          this.state.authPin = newPin;
+          this.elements.authPinInput.value = newPin; // Otomatis isi dengan PIN baru
+          this.showToast("PIN berhasil diperbarui.", "success");
+        })
+        .catch((err) => {
+          this.showToast(`Gagal: ${err.message}`, "error");
+        });
     },
 
     // --- UTILITAS & EVENT HANDLERS LAIN ---
     util: {
+      // ... (Tidak ada perubahan di fungsi ini)
       debounce(func, delay) {
         let timeout;
         return (...args) => {
@@ -642,6 +697,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     handleTabClick(e) {
+      // ... (Tidak ada perubahan di fungsi ini)
       const tabId = e.currentTarget.dataset.tab;
       this.elements.tabContents.forEach((c) => c.classList.remove("active"));
       this.elements.tabButtons.forEach((b) => b.classList.remove("active"));
@@ -651,24 +707,23 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     openColorPicker(sys, slot, context) {
-      // Tambahkan parameter 'context'
+      // --- FASE 1.2: Menambahkan dan menyimpan konteks ---
       this.state.activeSystemForModal = sys;
       this.state.activeColorSlot = slot;
-      this.state.activeColorContext = context; // Simpan konteks saat ini
+      this.state.activeColorContext = context;
 
       let currentColor = [255, 0, 0];
       const systemState = this.state.appState[sys];
 
       if (systemState) {
         if (sys === "sein") {
-          // Konteks untuk 'sein' selalu statis
           this.state.activeColorContext = "static";
           currentColor = systemState.warna;
         } else {
-          // Tentukan warna mana yang akan diambil berdasarkan konteks
           if (context === "static") {
             currentColor = systemState.stateKiri.warna;
           } else {
+            // context === 'dynamic'
             const colorKey = slot === 1 ? "warna" : `warna${slot}`;
             currentColor = systemState.stateKiri[colorKey] || [255, 0, 0];
           }
@@ -684,6 +739,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     handleColorPickerSave() {
+      // --- FASE 1.1, 1.2, 1.3 ---
       const { activeSystemForModal, activeColorSlot, activeColorContext } =
         this.state;
       if (!activeSystemForModal) return;
@@ -692,22 +748,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const newColorArray = [newColor.r, newColor.g, newColor.b];
       let payload = {};
 
-      // Fungsi untuk update state warna lokal
       const updateLocalColorState = (system, colorData) => {
         const stateToUpdate = this.state.appState[system].stateKiri;
-        if (colorData.mode === 0) {
-          // Warna statis
+        if (colorData.context === "static") {
           stateToUpdate.warna = newColorArray;
           stateToUpdate.modeEfek = 0;
         } else {
-          // Warna dinamis
           const key = `warna${colorData.slot > 1 ? colorData.slot : ""}`;
-          stateToUpdate[key.slice(0, -1)] = newColorArray; // Update 'warna' atau 'warnaX'
+          stateToUpdate[key] = newColorArray;
         }
         this.renderSystem(system);
       };
 
-      // Tentukan payload untuk API
       if (activeSystemForModal === "sein") {
         payload = { r: newColor.r, g: newColor.g, b: newColor.b };
       } else {
@@ -725,34 +777,30 @@ document.addEventListener("DOMContentLoaded", () => {
         this.config.systems.includes(activeSystemForModal);
 
       if (this.state.isSyncEnabled && isSyncableSystem) {
-        // Sinkronisasi
         const updatePromises = this.config.systems.map((targetSys) =>
           this.api.post(`/set-mode-${targetSys}`, payload)
         );
         Promise.all(updatePromises).then(() => {
           this.showToast("Warna berhasil disinkronkan", "success");
-          // Update state lokal untuk semua sistem
           this.config.systems.forEach((targetSys) => {
             updateLocalColorState(targetSys, {
-              mode: payload.mode,
+              context: activeColorContext,
               slot: activeColorSlot,
             });
           });
         });
       } else {
-        // Update tunggal
         this.api.post(`/set-mode-${activeSystemForModal}`, payload).then(() => {
           this.showToast(
             `${activeSystemForModal.toUpperCase()} warna diperbarui`,
             "success"
           );
-          // Update state lokal untuk sistem saat ini
           if (activeSystemForModal === "sein") {
             this.state.appState.sein.warna = newColorArray;
             this.renderSein();
           } else {
             updateLocalColorState(activeSystemForModal, {
-              mode: payload.mode,
+              context: activeColorContext,
               slot: activeColorSlot,
             });
           }
@@ -763,12 +811,14 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     closeResetModal() {
+      // ... (Tidak ada perubahan di fungsi ini)
       this.elements.resetModal.backdrop.style.display = "none";
       this.elements.resetModal.input.value = "";
       this.elements.resetModal.confirmBtn.disabled = true;
     },
 
     handleResetConfirm() {
+      // ... (Tidak ada perubahan di fungsi ini)
       this.api.post("/reset-to-default").then(() => {
         this.showToast(
           "Perangkat berhasil direset. Halaman akan dimuat ulang.",
@@ -779,6 +829,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     generateDummyState() {
+      // ... (Tidak ada perubahan di fungsi ini)
       const defaultLightState = {
         stateKiri: {
           warna: [230, 0, 35],
@@ -825,6 +876,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     populateDropdowns() {
+      // ... (Tidak ada perubahan di fungsi ini)
       const createOptions = (opts) =>
         opts
           .map((opt) => `<option value="${opt.value}">${opt.name}</option>`)

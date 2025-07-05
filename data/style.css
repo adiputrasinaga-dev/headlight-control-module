@@ -728,6 +728,38 @@ input:checked + .slider:before {
   color: var(--secondary-accent);
 }
 
+/* FASE 2.2: Styling untuk kontainer pratinjau preset */
+.preset-preview-container {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-left: 3px solid var(--secondary-accent);
+  padding: 15px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  min-height: 60px; /* Memberi ruang agar tidak 'loncat' saat loading */
+}
+
+.preset-preview-container h4 {
+  margin: 0 0 10px 0;
+  font-family: "Rajdhani", sans-serif;
+  color: var(--secondary-accent);
+  text-transform: none;
+  font-size: 1.1em;
+}
+
+.preset-preview-container p {
+  margin: 0;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.preset-preview-container p.error-text {
+  color: var(--error-color);
+  font-style: italic;
+  font-weight: 600;
+}
+
 /* --- Mobile Specific --- */
 @media (max-width: 768px) {
   .desktop-nav {
