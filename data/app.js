@@ -295,9 +295,9 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     bindControlEvents(sys) {
-      // --- FASE 1.1 & 1.3 ---
       const debouncedUpdate = this.util.debounce((payload) => {
         const updateAndRender = (targetSystem, data) => {
+          // Update state lokal
           Object.assign(this.state.appState[targetSystem], data);
           if (data.mode !== undefined) {
             this.state.appState[targetSystem].stateKiri.modeEfek = data.mode;
@@ -324,6 +324,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const elements = this.elements[sys];
       if (!elements || Object.keys(elements).length === 0) return;
+
+      // --- PERBAIKAN FITUR TARGET DIMULAI DI SINI ---
+      const targetButtons = document.querySelectorAll(
+        `[data-target-group="${sys}"] .sg-btn`
+      );
+      targetButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          // 1. Hapus kelas 'active' dari semua tombol di grup yang sama
+          targetButtons.forEach((btn) => btn.classList.remove("active"));
+          // 2. Tambahkan kelas 'active' ke tombol yang diklik
+          button.classList.add("active");
+          // 3. Dapatkan nilai target baru (misal: 'kiri', 'kanan', 'keduanya')
+          const newTarget = button.dataset.value;
+          // 4. Kirim pembaruan target ke perangkat
+          debouncedUpdate({ target: newTarget });
+          this.showToast(
+            `${
+              sys.charAt(0).toUpperCase() + sys.slice(1)
+            } target diubah ke ${newTarget}`,
+            "info"
+          );
+        });
+      });
+      // --- PERBAIKAN FITUR TARGET SELESAI ---
 
       document
         .querySelectorAll(`input[name="${sys}EffectType"]`)
@@ -352,7 +376,6 @@ document.addEventListener("DOMContentLoaded", () => {
         debouncedUpdate({ mode: parseInt(e.target.value, 10) });
       });
 
-      // --- FASE 1.2: Menambahkan konteks ---
       elements.colorPreviewStatic.addEventListener("click", () =>
         this.openColorPicker(sys, 1, "static")
       );
