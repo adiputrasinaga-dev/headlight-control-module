@@ -245,17 +245,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
     bindControlEvents(sys) {
       const debouncedUpdate = this.util.debounce((payload) => {
+        // Fungsi untuk mengupdate state lokal dan me-render ulang komponen
+        const updateAndRender = (targetSystem, data) => {
+          // Update state lokal (ini adalah contoh sederhana, bisa dibuat lebih kompleks)
+          // Untuk slider, kita langsung update nilai utamanya
+          Object.assign(this.state.appState[targetSystem], data);
+          // Render ulang hanya sistem yang berubah
+          this.renderSystem(targetSystem);
+        };
+
         if (this.state.isSyncEnabled && this.config.systems.includes(sys)) {
-          this.config.systems.forEach((targetSys) => {
-            this.api.post(`/set-mode-${targetSys}`, payload);
-          });
-          this.showToast(
-            "Pengaturan disinkronkan ke Alis, Shroud, & Demon",
-            "info"
+          // Sinkronisasi
+          const updatePromises = this.config.systems.map((targetSys) =>
+            this.api.post(`/set-mode-${targetSys}`, payload)
           );
-          setTimeout(() => this.fetchInitialState(), 500);
+          Promise.all(updatePromises).then(() => {
+            this.showToast("Pengaturan disinkronkan", "info");
+            // Update state lokal untuk semua sistem yang disinkronkan
+            this.config.systems.forEach((targetSys) =>
+              updateAndRender(targetSys, payload)
+            );
+          });
         } else {
-          this.api.post(`/set-mode-${sys}`, payload);
+          // Update tunggal
+          this.api.post(`/set-mode-${sys}`, payload).then(() => {
+            // Update state lokal hanya untuk sistem saat ini
+            updateAndRender(sys, payload);
+          });
         }
       }, this.config.debounceDelay);
 
@@ -265,24 +281,31 @@ document.addEventListener("DOMContentLoaded", () => {
       document
         .querySelectorAll(`input[name="${sys}EffectType"]`)
         .forEach((radio) => {
-          radio.addEventListener("change", () => this.updateEffectTypeUI(sys));
+          radio.addEventListener("change", (e) => {
+            this.updateEffectTypeUI(sys);
+            // Jika beralih ke statis, kirim mode: 0
+            if (e.target.value === "static") {
+              debouncedUpdate({ mode: 0 });
+            }
+          });
         });
 
       elements.brightness.addEventListener("input", () => {
         elements.brightnessValue.textContent = `${elements.brightness.value}%`;
-        debouncedUpdate({ brightness: elements.brightness.value });
+        debouncedUpdate({
+          brightness: parseInt(elements.brightness.value, 10),
+        });
       });
       elements.speed.addEventListener("input", () => {
         elements.speedValue.textContent = `${elements.speed.value}%`;
-        debouncedUpdate({ speed: elements.speed.value });
+        debouncedUpdate({ speed: parseInt(elements.speed.value, 10) });
       });
 
       elements.mode.addEventListener("change", (e) => {
         this.updateDynamicColorPreviews(sys, e.target.value);
-        debouncedUpdate({ mode: e.target.value });
+        debouncedUpdate({ mode: parseInt(e.target.value, 10) });
       });
 
-      // PERUBAHAN DI SINI: Menambahkan konteks 'static'
       elements.colorPreviewStatic.addEventListener("click", () =>
         this.openColorPicker(sys, 1, "static")
       );
@@ -290,7 +313,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const preview = document.getElementById(
           `${sys}ColorPreviewDynamic${i}`
         );
-        // PERUBAHAN DI SINI: Menambahkan konteks 'dynamic'
         if (preview)
           preview.addEventListener("click", () =>
             this.openColorPicker(sys, i, "dynamic")
@@ -667,17 +689,31 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!activeSystemForModal) return;
 
       const newColor = this.modalColorPicker.color.rgb;
+      const newColorArray = [newColor.r, newColor.g, newColor.b];
       let payload = {};
-      let endpoint = `/set-mode-${activeSystemForModal}`;
 
+      // Fungsi untuk update state warna lokal
+      const updateLocalColorState = (system, colorData) => {
+        const stateToUpdate = this.state.appState[system].stateKiri;
+        if (colorData.mode === 0) {
+          // Warna statis
+          stateToUpdate.warna = newColorArray;
+          stateToUpdate.modeEfek = 0;
+        } else {
+          // Warna dinamis
+          const key = `warna${colorData.slot > 1 ? colorData.slot : ""}`;
+          stateToUpdate[key.slice(0, -1)] = newColorArray; // Update 'warna' atau 'warnaX'
+        }
+        this.renderSystem(system);
+      };
+
+      // Tentukan payload untuk API
       if (activeSystemForModal === "sein") {
         payload = { r: newColor.r, g: newColor.g, b: newColor.b };
       } else {
-        // PERUBAHAN DI SINI: Menggunakan konteks yang tersimpan, bukan query ke DOM
         if (activeColorContext === "static") {
           payload = { mode: 0, r: newColor.r, g: newColor.g, b: newColor.b };
         } else {
-          // Konteks adalah 'dynamic'
           const suffix = activeColorSlot > 1 ? activeColorSlot : "";
           payload[`r${suffix}`] = newColor.r;
           payload[`g${suffix}`] = newColor.g;
@@ -687,31 +723,43 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const isSyncableSystem =
         this.config.systems.includes(activeSystemForModal);
-      if (this.state.isSyncEnabled && isSyncableSystem) {
-        const updatePromises = this.config.systems.map((targetSys) => {
-          const syncEndpoint = `/set-mode-${targetSys}`;
-          return this.api.post(syncEndpoint, payload);
-        });
 
-        Promise.all(updatePromises)
-          .then(() => {
-            this.showToast("Warna berhasil disinkronkan", "success");
-            this.fetchInitialState();
-            this.elements.colorPickerModal.backdrop.style.display = "none";
-          })
-          .catch((err) => {
-            this.showToast(`Gagal sinkronisasi: ${err.message}`, "error");
+      if (this.state.isSyncEnabled && isSyncableSystem) {
+        // Sinkronisasi
+        const updatePromises = this.config.systems.map((targetSys) =>
+          this.api.post(`/set-mode-${targetSys}`, payload)
+        );
+        Promise.all(updatePromises).then(() => {
+          this.showToast("Warna berhasil disinkronkan", "success");
+          // Update state lokal untuk semua sistem
+          this.config.systems.forEach((targetSys) => {
+            updateLocalColorState(targetSys, {
+              mode: payload.mode,
+              slot: activeColorSlot,
+            });
           });
+        });
       } else {
-        this.api.post(endpoint, payload).then(() => {
+        // Update tunggal
+        this.api.post(`/set-mode-${activeSystemForModal}`, payload).then(() => {
           this.showToast(
             `${activeSystemForModal.toUpperCase()} warna diperbarui`,
             "success"
           );
-          this.fetchInitialState();
-          this.elements.colorPickerModal.backdrop.style.display = "none";
+          // Update state lokal untuk sistem saat ini
+          if (activeSystemForModal === "sein") {
+            this.state.appState.sein.warna = newColorArray;
+            this.renderSein();
+          } else {
+            updateLocalColorState(activeSystemForModal, {
+              mode: payload.mode,
+              slot: activeColorSlot,
+            });
+          }
         });
       }
+
+      this.elements.colorPickerModal.backdrop.style.display = "none";
     },
 
     closeResetModal() {
