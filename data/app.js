@@ -1,21 +1,24 @@
 /*
  * ===================================================================
- * AERI LIGHT v17.9 - APP.JS (UI GAP FIX)
+ * AERI LIGHT v19.5 - APP.JS (OFFLINE SIMULATION FIX)
  * ===================================================================
  * Deskripsi Perubahan:
- * - Memperbaiki logika pada fungsi `renderActiveControl` untuk menyembunyikan
- * seluruh kontainer kontrol (cth: #alis-controls-container) bukan
- * hanya elemen di dalamnya.
- * - Perbaikan ini memastikan properti 'gap' pada CSS dapat bekerja
- * dengan benar dan menghilangkan celah vertikal yang tidak diinginkan.
+ * - FIX: Bug di mana aplikasi tidak interaktif saat "Disconnected".
+ * - REWORK: Mengimplementasikan pola "Optimistic UI" dengan benar.
+ * Perubahan pada UI kini diterapkan secara lokal terlebih dahulu,
+ * kemudian perintah dikirim ke perangkat hanya jika terhubung.
+ * - Ini membuat mode offline berfungsi penuh sebagai simulator.
  * ===================================================================
  */
+
+import AppConfig from "./config.js";
+
 document.addEventListener("DOMContentLoaded", () => {
   const App = {
     // --- STATE & KONFIGURASI APLIKASI ---
     state: {
+      isConnected: false,
       isSyncEnabled: false,
-      isDemoMode: false,
       activeSystemForModal: null,
       activeColorSlot: 1,
       activeColorContext: "static",
@@ -23,39 +26,12 @@ document.addEventListener("DOMContentLoaded", () => {
       appState: {},
       presets: [],
     },
-    config: {
-      debounceDelay: 250,
-      systems: ["alis", "shroud", "demon"],
-      modeOptions: {
-        static: [{ name: "Static", value: 0, colorSlots: 1 }],
-        dynamic: [
-          { name: "Breathing", value: 1, colorSlots: 1 },
-          { name: "Rainbow", value: 2, colorSlots: 0 },
-          { name: "Comet", value: 3, colorSlots: 1 },
-          { name: "Cylon Scanner", value: 4, colorSlots: 1 },
-          { name: "Twinkle", value: 5, colorSlots: 2 },
-          { name: "Fire", value: 6, colorSlots: 0 },
-          { name: "Gradient Shift", value: 7, colorSlots: 3 },
-        ],
-        welcome: [
-          { name: "Power-On Scan", value: 0 },
-          { name: "Ignition Burst", value: 1 },
-          { name: "Spectrum Resolve", value: 2 },
-          { name: "Theater Chase", value: 3 },
-        ],
-        sein: [
-          { name: "Sequential", value: 0 },
-          { name: "Pulsing Arrow", value: 1 },
-          { name: "Fill & Flush", value: 2 },
-          { name: "Comet Trail", value: 3 },
-        ],
-      },
-    },
+    config: AppConfig,
 
     elements: {},
     modalColorPicker: null,
 
-    init() {
+    async init() {
       this.cacheInitialElements();
       this.modalColorPicker = new iro.ColorPicker(
         "#modalColorPickerContainer",
@@ -71,9 +47,8 @@ document.addEventListener("DOMContentLoaded", () => {
       this.cacheDynamicElements();
       this.bindEvents();
       this.populateDropdowns();
-      this.fetchInitialState().then(() => {
-        this.populatePresetSlots();
-      });
+
+      await Promise.all([this.fetchInitialState(), this.populatePresetSlots()]);
     },
 
     cacheInitialElements() {
@@ -124,11 +99,35 @@ document.addEventListener("DOMContentLoaded", () => {
       const svgLeft = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M15.25 4.75a.75.75 0 00-1.06 0L8.72 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L10.31 11l5.94-5.19a.75.75 0 000-1.06z"></path></svg>`;
       const svgBoth = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8.75 4.75a.75.75 0 00-1.06 0L2.22 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L3.31 11l5.94-5.19a.75.75 0 000-1.06zm6.5 0a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L20.69 11l-5.94-5.19a.75.75 0 010-1.06z"></path></svg>`;
       const svgRight = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8.75 4.75a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L13.69 11l-5.94-5.19a.75.75 0 010-1.06z"></path></svg>`;
-      return `<div id="${sysKey}-controls" class="control-set">${panelInfoHTML}<div class="control-group"><label class="control-label">TARGET</label><div class="segmented-control" data-target-group="${sysKey}"><button class="sg-btn" data-value="kiri" title="Hanya Kiri">${svgLeft}</button><button class="sg-btn active" data-value="keduanya" title="Kiri & Kanan">${svgBoth}</button><button class="sg-btn" data-value="kanan" title="Hanya Kanan">${svgRight}</button></div></div><div class="control-group"><label class="control-label">TIPE EFEK</label><div class="radio-group" data-type-group="${sysKey}"><input type="radio" id="${sysKey}EffectTypeStatic" name="${sysKey}EffectType" value="static" checked/><label for="${sysKey}EffectTypeStatic">Statis</label><input type="radio" id="${sysKey}EffectTypeDynamic" name="${sysKey}EffectType" value="dynamic"/><label for="${sysKey}EffectTypeDynamic">Dinamis</label></div></div><div class="effect-details-wrapper"><div class="static-color-section"><div class="control-group"><label>WARNA SOLID</label><div id="${sysKey}ColorPreviewStatic" class="color-preview-box" title="Klik untuk mengubah warna"><span id="${sysKey}ColorHexStatic" class="color-hex-value">#RRGGBB</span></div></div></div><div class="dynamic-controls"><div class="dynamic-color-previews-container"><div class="control-group" id="${sysKey}-dynamic-color-group-1" style="display: none;"><label>WARNA 1</label><div id="${sysKey}ColorPreviewDynamic1" class="color-preview-box" title="Klik untuk mengubah Warna 1"><span id="${sysKey}ColorHexDynamic1" class="color-hex-value">#RRGGBB</span></div></div><div class="control-group" id="${sysKey}-dynamic-color-group-2" style="display: none;"><label>WARNA 2</label><div id="${sysKey}ColorPreviewDynamic2" class="color-preview-box" title="Klik untuk mengubah Warna 2"><span id="${sysKey}ColorHexDynamic2" class="color-hex-value">#RRGGBB</span></div></div><div class="control-group" id="${sysKey}-dynamic-color-group-3" style="display: none;"><label>WARNA 3</label><div id="${sysKey}ColorPreviewDynamic3" class="color-preview-box" title="Klik untuk mengubah Warna 3"><span id="${sysKey}ColorHexDynamic3" class="color-hex-value">#RRGGBB</span></div></div></div><div class="control-group"><label>MODE EFEK</label><select id="${sysKey}Mode" class="cyber-input" disabled></select></div><div class="control-group speed-group"><div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div><input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" disabled /></div></div></div><div class="control-group"><div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div><input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" disabled /></div></div>`;
+      return `
+        <div id="${sysKey}-controls" class="control-set">
+          ${panelInfoHTML}
+          <div class="control-group"><label class="control-label">TARGET</label><div class="segmented-control" data-target-group="${sysKey}"><button class="sg-btn" data-value="kiri" title="Hanya Kiri">${svgLeft}</button><button class="sg-btn active" data-value="keduanya" title="Kiri & Kanan">${svgBoth}</button><button class="sg-btn" data-value="kanan" title="Hanya Kanan">${svgRight}</button></div></div>
+          
+          <div class="control-group">
+            <label>MODE EFEK</label>
+            <select id="${sysKey}Mode" class="cyber-input"></select>
+          </div>
+          
+          <div class="control-group">
+            <label>WARNA</label>
+            <div id="${sysKey}-color-bar" class="color-bar-container"></div>
+          </div>
+          
+          <div id="${sysKey}-speed-control-wrapper" class="control-group">
+            <div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div>
+            <input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" />
+          </div>
+
+          <div class="control-group">
+            <div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div>
+            <input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" />
+          </div>
+        </div>`;
     },
 
     getSeinControlHTML() {
-      return `<div id="sein-controls" class="control-set"><div class="static-color-section" style="display: block;"><div class="control-group"><label>WARNA SOLID</label><div id="seinColorPreview" class="color-preview-box" title="Klik untuk mengubah warna"><span id="seinColorHex" class="color-hex-value">#RRGGBB</span></div></div></div><div class="control-group"><label>PILIH EFEK SEIN</label><select id="seinModeSettings" class="cyber-input" disabled></select></div><div class="control-group"><div class="slider-label-container"><label>SPEED</label><span id="seinSpeedValue">--%</span></div><input type="range" id="seinSpeed" class="local-slider" min="0" max="100" value="50" disabled /></div></div>`;
+      return `<div id="sein-controls" class="control-set"><div class="control-group"><label>WARNA</label><div id="sein-color-bar" class="color-bar-container"><div id="seinColorPreview" class="color-segment" title="Klik untuk mengubah warna"><span id="seinColorHex" class="color-hex-value">#RRGGBB</span></div></div></div><div class="control-group"><label>PILIH EFEK SEIN</label><select id="seinModeSettings" class="cyber-input"></select></div><div class="control-group"><div class="slider-label-container"><label>SPEED</label><span id="seinSpeedValue">--%</span></div><input type="range" id="seinSpeed" class="local-slider" min="0" max="100" value="50" /></div></div>`;
     },
 
     cacheDynamicElements() {
@@ -143,6 +142,21 @@ document.addEventListener("DOMContentLoaded", () => {
             el.id.replace(sys, "").slice(1);
           this.elements[sys][key] = el;
         });
+      });
+    },
+
+    updateLocalState(sys, payload) {
+      if (!this.state.appState[sys]) return;
+      const systemsToUpdate =
+        this.state.isSyncEnabled && this.config.systems.includes(sys)
+          ? this.config.systems
+          : [sys];
+      systemsToUpdate.forEach((currentSys) => {
+        const systemState = this.state.appState[currentSys];
+        Object.assign(systemState, payload);
+        if (payload.mode !== undefined)
+          systemState.stateKiri.modeEfek = payload.mode;
+        this.renderSystem(currentSys);
       });
     },
 
@@ -203,41 +217,39 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     bindControlEvents(sys) {
-      const instantUpdate = (payload) => {
-        if (this.state.isSyncEnabled && this.config.systems.includes(sys)) {
-          this.config.systems.forEach((targetSys) =>
+      const createUpdateHandler = (isDebounced) => (payload) => {
+        this.updateLocalState(sys, payload);
+        const apiCall = () => {
+          const systemsToUpdate =
+            this.state.isSyncEnabled && this.config.systems.includes(sys)
+              ? this.config.systems
+              : [sys];
+          systemsToUpdate.forEach((targetSys) =>
             this.api.post(`/set-mode-${targetSys}`, payload)
           );
+        };
+        if (isDebounced) {
+          this.util.debounce(apiCall, this.config.debounceDelay)();
         } else {
-          this.api.post(`/set-mode-${sys}`, payload);
+          apiCall();
         }
       };
-      const debouncedUpdate = this.util.debounce(
-        instantUpdate,
-        this.config.debounceDelay
-      );
+
+      const instantUpdate = createUpdateHandler(false);
+      const debouncedUpdate = createUpdateHandler(true);
       const elements = this.elements[sys];
-      if (!elements || Object.keys(elements).length === 0) return;
+      if (!elements || !Object.keys(elements).length) return;
+
       const targetButtons = document.querySelectorAll(
         `[data-target-group="${sys}"] .sg-btn`
       );
       targetButtons.forEach((button) => {
         button.addEventListener("click", () => {
-          targetButtons.forEach((b) => b.classList.remove("active"));
-          button.classList.add("active");
           instantUpdate({ target: button.dataset.value });
         });
       });
-      document
-        .querySelectorAll(`input[name="${sys}EffectType"]`)
-        .forEach((radio) => {
-          radio.addEventListener("change", (e) => {
-            this.updateEffectTypeUI(sys);
-            if (e.target.value === "static") instantUpdate({ mode: 0 });
-          });
-        });
+
       elements.mode.addEventListener("change", (e) => {
-        this.updateDynamicColorPreviews(sys, e.target.value);
         instantUpdate({ mode: parseInt(e.target.value, 10) });
       });
       elements.brightness.addEventListener("input", () => {
@@ -250,27 +262,14 @@ document.addEventListener("DOMContentLoaded", () => {
         elements.speedValue.textContent = `${elements.speed.value}%`;
         debouncedUpdate({ speed: parseInt(elements.speed.value, 10) });
       });
-      elements.colorPreviewStatic.addEventListener("click", () =>
-        this.openColorPicker(sys, 1, "static")
-      );
-      for (let i = 1; i <= 3; i++) {
-        const preview = document.getElementById(
-          `${sys}ColorPreviewDynamic${i}`
-        );
-        if (preview)
-          preview.addEventListener("click", () =>
-            this.openColorPicker(sys, i, "dynamic")
-          );
-      }
     },
 
     bindSeinEvents() {
       const seinElements = this.elements.sein;
       if (!seinElements || !seinElements.controls) return;
-      const debouncedUpdate = this.util.debounce(
-        (payload) => this.api.post(`/set-mode-sein`, payload),
-        this.config.debounceDelay
-      );
+      const debouncedUpdate = this.util.debounce((payload) => {
+        this.api.post(`/set-mode-sein`, payload);
+      }, this.config.debounceDelay);
       seinElements.modeSettings.addEventListener("change", () =>
         debouncedUpdate({ mode: seinElements.modeSettings.value })
       );
@@ -278,20 +277,16 @@ document.addEventListener("DOMContentLoaded", () => {
         seinElements.speedValue.textContent = `${seinElements.speed.value}%`;
         debouncedUpdate({ speed: seinElements.speed.value });
       });
-      seinElements.colorPreview.addEventListener("click", () =>
-        this.openColorPicker("sein", 1, "static")
-      );
+      document
+        .getElementById("seinColorPreview")
+        .addEventListener("click", () =>
+          this.openColorPicker("sein", 1, "static")
+        );
     },
 
     api: {
       post: async (endpoint, body) => {
-        if (App.state.isDemoMode && !endpoint.startsWith("/get")) {
-          console.log("DEMO MODE POST:", endpoint, body);
-          return Promise.resolve({
-            ok: true,
-            text: () => Promise.resolve("OK (Demo)"),
-          });
-        }
+        if (!App.state.isConnected) return Promise.resolve({ ok: true });
         try {
           const response = await fetch(endpoint, {
             method: "POST",
@@ -306,36 +301,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       },
       get: async (endpoint) => {
-        if (App.state.isDemoMode) {
-          console.log("DEMO MODE GET:", endpoint);
-          if (endpoint === "/get-presets") {
-            return Promise.resolve({
-              ok: true,
-              json: () =>
-                Promise.resolve([
-                  { slot: 1, name: "Preset 1 (Demo)", state: null },
-                  {
-                    slot: 2,
-                    name: "Preset 2 (Demo)",
-                    state: { alis: { stateKiri: { modeEfek: 2 } } },
-                  },
-                  { slot: 3, name: "Preset 3 (Demo)", state: null },
-                  { slot: 4, name: "Preset 4 (Demo)", state: null },
-                  { slot: 5, name: "Preset 5 (Demo)", state: null },
-                ]),
-            });
-          }
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(App.generateDummyState()),
-          });
-        }
         try {
           const response = await fetch(endpoint);
           if (!response.ok) throw new Error(await response.text());
           return response;
         } catch (error) {
-          App.showToast(`Gagal: ${error.message}`, "error");
           throw error;
         }
       },
@@ -346,17 +316,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const response = await App.api.get("/get-state");
         const data = await response.json();
         this.state.appState = data;
-        this.state.isDemoMode = false;
         this.updateConnectionStatus(true);
-        this.renderUI();
       } catch (error) {
-        console.error("Inisialisasi gagal, masuk ke mode demo:", error);
-        this.state.isDemoMode = true;
+        console.error("Inisialisasi gagal, memuat data dummy:", error);
         this.state.appState = this.generateDummyState();
-        this.updateConnectionStatus(false, true);
-        this.showToast("Gagal terhubung. Aplikasi dalam Mode Uji.", "info");
-        this.renderUI();
+        this.updateConnectionStatus(false);
+        this.showToast("Gagal terhubung. Menampilkan mode offline.", "info");
       }
+      this.renderUI();
     },
 
     renderUI() {
@@ -392,20 +359,8 @@ document.addEventListener("DOMContentLoaded", () => {
       elements.brightnessValue.textContent = `${config.brightness}%`;
       elements.speed.value = config.speed;
       elements.speedValue.textContent = `${config.speed}%`;
-      const isStatic = config.stateKiri.modeEfek === 0;
-      document.getElementById(`${sys}EffectTypeStatic`).checked = isStatic;
-      document.getElementById(`${sys}EffectTypeDynamic`).checked = !isStatic;
-      this.updateEffectTypeUI(sys);
       elements.mode.value = config.stateKiri.modeEfek;
-      const staticColor = config.stateKiri.warna;
-      const staticHex = this.util.rgbToHex(
-        staticColor[0],
-        staticColor[1],
-        staticColor[2]
-      );
-      elements.colorPreviewStatic.style.backgroundColor = staticHex;
-      elements.colorHexStatic.textContent = staticHex;
-      this.updateDynamicColorPreviews(sys, config.stateKiri.modeEfek);
+      this.updateDynamicControlsUI(sys);
     },
 
     renderSein() {
@@ -417,8 +372,12 @@ document.addEventListener("DOMContentLoaded", () => {
       seinElements.speedValue.textContent = `${seinConfig.speed}%`;
       const color = seinConfig.warna;
       const hex = this.util.rgbToHex(color[0], color[1], color[2]);
-      seinElements.colorPreview.style.backgroundColor = hex;
-      seinElements.colorHex.textContent = hex;
+      const preview = document.getElementById("seinColorPreview");
+      if (preview) {
+        preview.style.backgroundColor = hex;
+        const hexSpan = preview.querySelector(".color-hex-value");
+        if (hexSpan) hexSpan.textContent = hex;
+      }
     },
 
     renderWelcomeSettings() {
@@ -441,78 +400,59 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    updateEffectTypeUI(sys) {
-      const controlSet = document.getElementById(`${sys}-controls`);
-      if (!controlSet) return;
-      const isStatic =
-        document.querySelector(`input[name="${sys}EffectType"]:checked`)
-          .value === "static";
-      controlSet.querySelector(".static-color-section").style.display = isStatic
-        ? "block"
-        : "none";
-      controlSet.querySelector(".dynamic-controls").style.display = isStatic
-        ? "none"
-        : "flex";
-    },
-
-    updateDynamicColorPreviews(sys, modeValue) {
-      const mode = this.config.modeOptions.dynamic.find(
-        (m) => m.value == modeValue
-      );
+    updateDynamicControlsUI(sys) {
+      const modeValue = document.getElementById(`${sys}Mode`).value;
+      const mode = this.config.effectModes.find((m) => m.value == modeValue);
       if (!mode) return;
-      for (let i = 1; i <= 3; i++) {
-        const group = document.getElementById(
-          `${sys}-dynamic-color-group-${i}`
+
+      const speedControlWrapper = document.getElementById(
+        `${sys}-speed-control-wrapper`
+      );
+      const colorBar = document.getElementById(`${sys}-color-bar`);
+
+      speedControlWrapper.style.display = mode.hasSpeed ? "block" : "none";
+      colorBar.style.display = mode.colorSlots > 0 ? "flex" : "none";
+      colorBar.innerHTML = "";
+
+      for (let i = 1; i <= mode.colorSlots; i++) {
+        const segment = document.createElement("div");
+        segment.className = "color-segment";
+        segment.dataset.slot = i;
+        segment.title = `Klik untuk mengubah Warna ${i}`;
+
+        const colorKey = i === 1 ? "warna" : `warna${i}`;
+        const color = this.state.appState[sys].stateKiri[colorKey] || [0, 0, 0];
+        const hex = this.util.rgbToHex(color[0], color[1], color[2]);
+        segment.style.backgroundColor = hex;
+
+        segment.addEventListener("click", () =>
+          this.openColorPicker(sys, i, mode.value === 0 ? "static" : "dynamic")
         );
-        if (!group) continue;
-        const isVisible = i <= mode.colorSlots;
-        group.style.display = isVisible ? "block" : "none";
-        if (isVisible) {
-          const previewBox = document.getElementById(
-            `${sys}ColorPreviewDynamic${i}`
-          );
-          const hexSpan = document.getElementById(`${sys}ColorHexDynamic${i}`);
-          const colorKey = i === 1 ? "warna" : `warna${i}`;
-          const color = this.state.appState[sys].stateKiri[colorKey] || [
-            0, 0, 0,
-          ];
-          const hex = this.util.rgbToHex(color[0], color[1], color[2]);
-          previewBox.style.backgroundColor = hex;
-          hexSpan.textContent = hex;
-        }
+        colorBar.appendChild(segment);
       }
     },
 
-    // --- PERBAIKAN DI SINI ---
     renderActiveControl() {
       const activeControl = document.querySelector(
         'input[name="controlTarget"]:checked'
       ).value;
-      // Gabungkan semua nama sistem kontrol ke dalam satu array
       const allControlSystems = [...this.config.systems, "sein"];
-
       allControlSystems.forEach((sys) => {
-        // Target elemen kontainer terluar, bukan elemen di dalamnya
         const container = document.getElementById(`${sys}-controls-container`);
         if (container) {
-          // Tampilkan kontainer jika cocok, sembunyikan jika tidak
           container.style.display = sys === activeControl ? "block" : "none";
         }
       });
     },
 
-    updateConnectionStatus(isConnected, isTesting = false) {
-      if (isTesting) {
-        this.elements.statusIcon.className = "testing";
-        this.elements.statusText.textContent = "Mode Uji";
-      } else {
-        this.elements.statusIcon.className = isConnected
-          ? "connected"
-          : "disconnected";
-        this.elements.statusText.textContent = isConnected
-          ? "Connected"
-          : "Disconnected";
-      }
+    updateConnectionStatus(isConnected) {
+      this.state.isConnected = isConnected;
+      this.elements.statusIcon.className = isConnected
+        ? "connected"
+        : "disconnected";
+      this.elements.statusText.textContent = isConnected
+        ? "Connected"
+        : "Disconnected";
     },
 
     showToast(message, type = "success") {
@@ -565,11 +505,7 @@ document.addEventListener("DOMContentLoaded", () => {
           currentColor = systemState.warna;
         } else {
           const colorKey =
-            context === "static"
-              ? "warna"
-              : slot === 1
-              ? "warna"
-              : `warna${slot}`;
+            context === "static" || slot === 1 ? "warna" : `warna${slot}`;
           currentColor = systemState.stateKiri[colorKey] || [255, 0, 0];
         }
       }
@@ -599,21 +535,15 @@ document.addEventListener("DOMContentLoaded", () => {
           payload[`b${suffix}`] = newColor.b;
         }
       }
-      const apiCall = (sys) => this.api.post(`/set-mode-${sys}`, payload);
-      const systemsToUpdate =
-        this.state.isSyncEnabled &&
-        this.config.systems.includes(activeSystemForModal)
-          ? this.config.systems
-          : [activeSystemForModal];
-      Promise.all(systemsToUpdate.map(apiCall)).then(() => {
+
+      this.updateLocalState(activeSystemForModal, payload);
+      this.api.post(`/set-mode-${activeSystemForModal}`, payload).then(() => {
         this.showToast(
-          systemsToUpdate.length > 1
-            ? "Warna berhasil disinkronkan"
-            : `${activeSystemForModal.toUpperCase()} warna diperbarui`,
+          `${activeSystemForModal.toUpperCase()} warna diperbarui`,
           "success"
         );
-        this.fetchInitialState();
       });
+
       this.elements.colorPickerModal.backdrop.style.display = "none";
     },
 
@@ -643,6 +573,7 @@ document.addEventListener("DOMContentLoaded", () => {
         this.updatePresetPreview();
       } catch (error) {
         this.showToast("Gagal memuat daftar preset", "error");
+        this.elements.presetSlot.innerHTML = `<option value="">Gagal Memuat</option>`;
       }
     },
 
@@ -657,15 +588,10 @@ document.addEventListener("DOMContentLoaded", () => {
           presetData.state.alis.stateKiri
         ) {
           const alisModeValue = presetData.state.alis.stateKiri.modeEfek;
-          const modeOption = this.config.modeOptions.dynamic.find(
+          const modeOption = this.config.effectModes.find(
             (m) => m.value === alisModeValue
           );
-          const alisModeName =
-            alisModeValue === 0
-              ? "Statis"
-              : modeOption
-              ? modeOption.name
-              : "Tidak Dikenal";
+          const alisModeName = modeOption ? modeOption.name : "Tidak Dikenal";
           this.elements.presetPreview.innerHTML = `<h4>Pratinjau: "${presetData.name}"</h4><p>Preset ini berisi konfigurasi. Contoh: Mode Alis adalah ${alisModeName}.</p>`;
         } else {
           this.elements.presetPreview.innerHTML = `<h4>Pratinjau: "${presetData.name}"</h4><p>Slot preset ini kosong. Simpan konfigurasi saat ini untuk mengisinya.</p>`;
@@ -716,17 +642,17 @@ document.addEventListener("DOMContentLoaded", () => {
           warna: [230, 0, 35],
           warna2: [0, 246, 255],
           warna3: [0, 255, 0],
-          modeEfek: 1,
+          modeEfek: 0,
         },
         stateKanan: {
           warna: [230, 0, 35],
           warna2: [0, 246, 255],
           warna3: [0, 255, 0],
-          modeEfek: 1,
+          modeEfek: 0,
         },
         ledCount: 50,
         brightness: 85,
-        speed: 60,
+        speed: 50,
         target: "keduanya",
       };
       return {
@@ -758,13 +684,13 @@ document.addEventListener("DOMContentLoaded", () => {
       this.config.systems.forEach((sys) => {
         const modeSelect = document.getElementById(`${sys}Mode`);
         if (modeSelect)
-          modeSelect.innerHTML = createOptions(this.config.modeOptions.dynamic);
+          modeSelect.innerHTML = createOptions(this.config.effectModes);
       });
       document.getElementById("welcomeMode").innerHTML = createOptions(
-        this.config.modeOptions.welcome
+        this.config.welcomeModes
       );
       document.getElementById("seinModeSettings").innerHTML = createOptions(
-        this.config.modeOptions.sein
+        this.config.seinModes
       );
     },
   };

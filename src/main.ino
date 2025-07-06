@@ -1,18 +1,13 @@
 /*
- * ===================================================================================
- * AERI LIGHT v17.9 - FIRMWARE (DEPRECATION WARNINGS FIXED)
- * ===================================================================================
+ * ===================================================================
+ * AERI LIGHT v19.2 - FIRMWARE (FULLY MODULAR & FINAL)
+ * ===================================================================
  * Deskripsi:
- * Firmware ESP32 yang telah diperbarui untuk menghilangkan peringatan "deprecated"
- * dari library ArduinoJson. Fungsi `containsKey()` telah diganti dengan metode
- * `obj[key].is<T>()` yang lebih modern.
- *
- * Perubahan Utama:
- * 1.  Modernisasi ArduinoJson: Mengganti semua pemanggilan `containsKey()` di dalam
- * fungsi `handleLoadPreset` dan `deserializeLightConfig`.
- * 2.  Kode Lebih Bersih: Menghilangkan peringatan saat kompilasi.
- * 3.  Future-Proofing: Memastikan kompatibilitas dengan versi ArduinoJson mendatang.
- * ===================================================================================
+ * Versi firmware final yang sepenuhnya modular. Semua logika efek
+ * kini berada di dalam sub-folder `src/effects/` dan dipanggil
+ * melalui Effect Registry. Struktur ini sangat bersih, stabil, dan
+ * mudah untuk diperluas di masa depan.
+ * ===================================================================
  */
 
 // --- Library ---
@@ -24,9 +19,15 @@
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 
+// --- File Efek Modular ---
+#include "effects/effects.h"
+#include "effects/welcome_effects.h"
+#include "effects/custom_welcome_effects.h"
+#include "effects/sein_effects.h"
+
 // --- Konfigurasi Jaringan Access Point ---
-const char *AP_SSID = "AERI_LIGHT";   // Nama WiFi yang dibuat perangkat
-const char *AP_PASSWORD = "12345678"; // Password untuk WiFi perangkat
+const char *AP_SSID = "AERI_LIGHT";
+const char *AP_PASSWORD = "12345678";
 
 // --- Definisi Pin & LED ---
 #define PIN_ALIS_KIRI 5
@@ -87,6 +88,29 @@ unsigned long previewEndTime = 0;
 CRGB *previewLedsKiri = nullptr, *previewLedsKanan = nullptr;
 uint8_t previewLedCount = 0;
 
+// === EFFECT REGISTRIES ===
+typedef void (*EffectFunction)(EffectParams &);
+EffectFunction effectRegistry[] = {
+    solid, breathing, rainbow, comet, cylonScanner, twinkle, fire,
+    gradientShift, plasmaBall, theaterChase, colorWipe, pride, pacifica, bouncingBalls,
+    meteor, confetti, juggle, sinelon, noise, matrix, ripple, larsonScanner, twoColorWipe, lightning};
+const uint8_t numEffects = sizeof(effectRegistry) / sizeof(effectRegistry[0]);
+
+typedef void (*WelcomeEffectFunction)(WelcomeEffectParams &);
+WelcomeEffectFunction welcomeEffectRegistry[] = {
+    WelcomeEffects::powerOnScan, WelcomeEffects::ignitionBurst, WelcomeEffects::spectrumResolve,
+    WelcomeEffects::theaterChaseWelcome, WelcomeEffects::dualCometWelcome, WelcomeEffects::centerFill,
+    CustomWelcomeEffects::charging, CustomWelcomeEffects::glitch, CustomWelcomeEffects::sonar,
+    CustomWelcomeEffects::burning, CustomWelcomeEffects::warpSpeed, CustomWelcomeEffects::dna,
+    CustomWelcomeEffects::laser, CustomWelcomeEffects::heartbeat, CustomWelcomeEffects::liquid,
+    CustomWelcomeEffects::spotlights};
+const uint8_t numWelcomeEffects = sizeof(welcomeEffectRegistry) / sizeof(welcomeEffectRegistry[0]);
+
+typedef void (*SeinEffectFunction)(SeinEffectParams &);
+SeinEffectFunction seinEffectRegistry[] = {
+    SeinEffects::sequential, SeinEffects::pulsingArrow, SeinEffects::fillAndFlush, SeinEffects::cometTrail};
+const uint8_t numSeinEffects = sizeof(seinEffectRegistry) / sizeof(seinEffectRegistry[0]);
+
 // --- Prototipe Fungsi ---
 void resetToDefaults();
 void simpanPengaturan();
@@ -130,16 +154,14 @@ void setup()
   pinMode(PIN_INPUT_SEIN_KIRI, INPUT_PULLUP);
   pinMode(PIN_INPUT_SEIN_KANAN, INPUT_PULLUP);
 
-  // --- Setup WiFi dalam Mode Access Point (AP) ---
   Serial.print("Membuat Access Point: ");
   Serial.println(AP_SSID);
   WiFi.mode(WIFI_AP);
   WiFi.softAP(AP_SSID, AP_PASSWORD);
 
   Serial.print("AP IP address: ");
-  Serial.println(WiFi.softAPIP()); // Alamat IP default biasanya 192.168.4.1
+  Serial.println(WiFi.softAPIP());
 
-  // --- Konfigurasi Server ---
   server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
   server.on("/get-state", HTTP_GET, handleGetState);
   server.on("/set-config", HTTP_POST, handleSetConfig);
@@ -252,68 +274,24 @@ void bacaPengaturan()
 
 void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
 {
-  uint8_t globalBrightness = FastLED.getBrightness();
+  uint8_t originalBrightness = FastLED.getBrightness();
   FastLED.setBrightness(config.brightness);
+
   auto animate = [&](const LightState &state, CRGB *leds, uint8_t count)
   {
     fill_solid(leds, MAX_LEDS, CRGB::Black);
     if (count == 0)
       return;
-    uint8_t currentSpeed = map(config.speed, 0, 100, 1, 15);
-    uint8_t currentIntensity = 80;
-    switch (state.modeEfek)
+    if (state.modeEfek < numEffects)
     {
-    case 0:
-      fill_solid(leds, count, state.warna);
-      break;
-    case 1:
-    {
-      CRGB tempColor = state.warna;
-      fill_solid(leds, count, tempColor.nscale8(sin8(animStep * currentSpeed)));
-    }
-    break;
-    case 2:
-      fill_rainbow(leds, count, animStep * currentSpeed, 256 / count);
-      break;
-    case 3:
-    {
-      float p = fmod((float)animStep * currentSpeed * 0.5, (float)count + 15);
-      fadeToBlackBy(leds, count, 64);
-      if ((int)p < count)
-        leds[(int)p] = state.warna;
-    }
-    break;
-    case 4:
-    {
-      int p = map(triwave8((animStep * currentSpeed) / 2), 0, 255, 0, count - 4);
-      fadeToBlackBy(leds, count, 64);
-      if (p >= 0 && (p + 3) < count)
-      {
-        for (int i = 0; i < 4; i++)
-          leds[p + i] = state.warna;
-      }
-    }
-    break;
-    case 5:
-    {
-      fadeToBlackBy(leds, count, 40);
-      if (random8() < currentIntensity)
-        leds[random16(count)] = (random8() < 128) ? state.warna : state.warna2;
-    }
-    break;
-    case 6:
-    {
-      for (int i = 0; i < count; i++)
-        leds[i].nscale8(192);
-      if (random8() < currentIntensity)
-        leds[random16(count)] = HeatColor(random8(160, 255));
-    }
-    break;
-    case 7:
-      fl::fill_gradient_RGB(leds, count, state.warna, state.warna2, state.warna3);
-      break;
+      CRGB c1 = state.warna;
+      CRGB c2 = state.warna2;
+      CRGB c3 = state.warna3;
+      EffectParams params = {leds, count, animStep, map(config.speed, 0, 100, 1, 15), c1, c2, c3};
+      effectRegistry[state.modeEfek](params);
     }
   };
+
   if (strcmp(config.target, "kiri") == 0)
   {
     animate(config.stateKiri, ledsKiri, config.ledCount);
@@ -334,52 +312,20 @@ void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
       fill_solid(ledsKanan, MAX_LEDS, CRGB::Black);
     }
   }
-  FastLED.setBrightness(globalBrightness);
+
+  FastLED.setBrightness(originalBrightness);
 }
+
 void jalankanModeSein(bool isKiriActive, bool isKananActive)
 {
   auto animate = [&](uint8_t mode, CRGB *leds, uint8_t count)
   {
     if (count == 0)
       return;
-    uint16_t animSpeed = map(seinConfig.speed, 0, 100, 25, 5);
-    switch (mode)
+    if (mode < numSeinEffects)
     {
-    case 0:
-    {
-      uint16_t pos = (millis() / animSpeed) % (count + 5);
-      fill_solid(leds, count, CRGB::Black);
-      if (pos < count)
-        fill_solid(leds, pos + 1, seinConfig.warna);
-    }
-    break;
-    case 1:
-    {
-      fill_solid(leds, count, (millis() / 500) % 2 ? seinConfig.warna : CRGB::Black);
-    }
-    break;
-    case 2:
-    {
-      uint16_t c = (millis() / (animSpeed * count));
-      if (c % 2 == 0)
-      {
-        uint16_t p = (millis() / animSpeed) % count;
-        fill_solid(leds, p + 1, seinConfig.warna);
-      }
-      else
-      {
-        fill_solid(leds, count, CRGB::Black);
-      }
-    }
-    break;
-    case 3:
-    {
-      float p = fmod((float)millis() / (animSpeed * 0.5), (float)count + 10);
-      fadeToBlackBy(leds, count, 40);
-      if (p < count)
-        leds[(int)p] = seinConfig.warna;
-    }
-    break;
+      SeinEffectParams params = {leds, count, seinConfig.speed, seinConfig.warna};
+      seinEffectRegistry[mode](params);
     }
   };
   if (isKiriActive)
@@ -387,6 +333,7 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
   if (isKananActive)
     animate(seinConfig.mode, ledsAlisKanan, seinConfig.ledCount);
 }
+
 void jalankanModeWelcome()
 {
   static uint32_t startTime = 0;
@@ -394,71 +341,32 @@ void jalankanModeWelcome()
     startTime = millis();
   uint32_t elapsed = millis() - startTime;
   uint16_t duration = globalConfig.durasiWelcome * 1000;
+
   if (elapsed > duration)
   {
     isWelcomeActive = false;
     startTime = 0;
     return;
   }
+
   uint8_t count = alisConfig.ledCount;
-  switch (globalConfig.modeWelcome)
+  fill_solid(ledsAlisKiri, count, CRGB::Black);
+
+  if (globalConfig.modeWelcome < numWelcomeEffects)
   {
-  case 0:
-  {
-    int p = map(triwave8(map(elapsed, 0, duration, 0, 255)), 0, 255, 0, count - 1);
-    fill_solid(ledsAlisKiri, count, CRGB::Black);
-    if (p >= 0 && p < count)
-      ledsAlisKiri[p] = CRGB::Red;
+    CRGB c1 = alisConfig.stateKiri.warna;
+    CRGB c2 = alisConfig.stateKiri.warna2;
+    WelcomeEffectParams params = {ledsAlisKiri, count, elapsed, duration, c1, c2};
+    welcomeEffectRegistry[globalConfig.modeWelcome](params);
   }
-  break;
-  case 1:
-  {
-    uint8_t b = map(elapsed, 0, duration, 0, (count / 2) + 1);
-    for (int i = 0; i < b; i++)
-    {
-      if ((count / 2 + i) < count)
-        ledsAlisKiri[count / 2 + i] = CRGB::Orange;
-      if ((count / 2 - i) >= 0)
-        ledsAlisKiri[count / 2 - i] = CRGB::Orange;
-    }
-  }
-  break;
-  case 2:
-  {
-    if (elapsed < duration / 2)
-    {
-      fill_rainbow(ledsAlisKiri, count, map(elapsed, 0, duration / 2, 0, 255), 256 / count);
-    }
-    else
-    {
-      CRGB t = alisConfig.stateKiri.warna;
-      uint8_t a = map(elapsed, duration / 2, duration, 0, 255);
-      for (int i = 0; i < count; i++)
-      {
-        ledsAlisKiri[i] = blend(ledsAlisKiri[i], t, a);
-      }
-    }
-  }
-  break;
-  case 3:
-  {
-    uint16_t p = map(elapsed, 0, duration, 0, count / 2);
-    fill_solid(ledsAlisKiri, count, CRGB::Black);
-    for (int i = 0; i < p; i++)
-    {
-      if (i < count)
-        ledsAlisKiri[i] = CRGB::Blue;
-      if ((count - 1 - i) >= 0)
-        ledsAlisKiri[count - 1 - i] = CRGB::Blue;
-    }
-  }
-  break;
-  }
+
   if (count > 0)
   {
     memcpy(ledsAlisKanan, ledsAlisKiri, sizeof(CRGB) * count);
   }
 }
+
+// ... Sisa kode tidak berubah ...
 void handleGetState(AsyncWebServerRequest *request)
 {
   JsonDocument doc;
@@ -727,7 +635,6 @@ void handleSavePreset(AsyncWebServerRequest *request)
     request->send(400, "text/plain", "Parameter tidak lengkap");
   }
 }
-
 void handleLoadPreset(AsyncWebServerRequest *request)
 {
   if (request->hasParam("slot", true))
@@ -766,7 +673,6 @@ void handleLoadPreset(AsyncWebServerRequest *request)
     deserializeLightConfig(so["alis"].as<JsonObject>(), alisConfig);
     deserializeLightConfig(so["shroud"].as<JsonObject>(), shroudConfig);
     deserializeLightConfig(so["demon"].as<JsonObject>(), demonConfig);
-    // PERBAIKAN: Menggunakan obj.is<T>() untuk pemeriksaan yang aman
     if (so["sein"].is<JsonObject>())
     {
       JsonObject i = so["sein"].as<JsonObject>();
@@ -786,7 +692,6 @@ void handleLoadPreset(AsyncWebServerRequest *request)
     request->send(400, "text/plain", "Parameter tidak lengkap");
   }
 }
-
 void serializeLightConfig(JsonObject &obj, const LightConfig &config)
 {
   obj["ledCount"] = config.ledCount;
@@ -809,7 +714,6 @@ void serializeLightConfig(JsonObject &obj, const LightConfig &config)
   w3k.add(config.stateKiri.warna3.b);
   obj["stateKanan"] = sk;
 }
-
 void deserializeLightConfig(const JsonObject &obj, LightConfig &config)
 {
   if (obj.isNull())
@@ -817,7 +721,6 @@ void deserializeLightConfig(const JsonObject &obj, LightConfig &config)
   config.ledCount = obj["ledCount"] | config.ledCount;
   config.brightness = obj["brightness"] | config.brightness;
   config.speed = obj["speed"] | config.speed;
-  // PERBAIKAN: Menggunakan obj.is<T>() untuk pemeriksaan yang aman
   if (obj["target"].is<const char *>())
   {
     strncpy(config.target, obj["target"], sizeof(config.target) - 1);
@@ -826,7 +729,6 @@ void deserializeLightConfig(const JsonObject &obj, LightConfig &config)
   if (!sk.isNull())
   {
     config.stateKiri.modeEfek = sk["modeEfek"] | config.stateKiri.modeEfek;
-    // PERBAIKAN: Menggunakan obj.is<T>() untuk pemeriksaan yang aman
     if (sk["warna"].is<JsonArray>())
     {
       JsonArray wk = sk["warna"].as<JsonArray>();
