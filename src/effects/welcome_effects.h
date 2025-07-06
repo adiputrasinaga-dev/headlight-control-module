@@ -21,6 +21,7 @@ struct WelcomeEffectParams
     uint32_t duration;
     CRGB &color1;
     CRGB &color2; // Ditambahkan untuk konsistensi
+    CRGB &color3; // Ditambahkan untuk konsistensi
 };
 
 namespace WelcomeEffects

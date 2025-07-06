@@ -1,16 +1,3 @@
-/*
- * ===================================================================
- * AERI LIGHT - CONFIGURATION FILE (MODULAR & EXPANDED)
- * ===================================================================
- * Deskripsi:
- * File ini berfungsi sebagai pusat konfigurasi untuk semua mode efek
- * yang tersedia di aplikasi. Untuk menambah atau mengubah mode,
- * Anda hanya perlu mengedit file ini.
- *
- * v19.2: Menambahkan 10 mode efek utama dan 2 mode welcome baru.
- * ===================================================================
- */
-
 const AppConfig = {
   debounceDelay: 250,
   systems: ["alis", "shroud", "demon"],
@@ -41,7 +28,6 @@ const AppConfig = {
     { name: "Two-Color Wipe", value: 22, colorSlots: 2, hasSpeed: true },
     { name: "Lightning", value: 23, colorSlots: 0, hasSpeed: true },
   ],
-
   welcomeModes: [
     { name: "Power-On Scan", value: 0 },
     { name: "Ignition Burst", value: 1 },
@@ -62,9 +48,9 @@ const AppConfig = {
   ],
 
   seinModes: [
-    { name: "Sequential", value: 0 },
-    { name: "Pulsing Arrow", value: 1 },
-    { name: "Fill & Flush", value: 2 },
-    { name: "Comet Trail", value: 3 },
+    { name: "Sequential", value: 0, colorSlots: 1, hasSpeed: true },
+    { name: "Pulsing Arrow", value: 1, colorSlots: 1, hasSpeed: true },
+    { name: "Fill & Flush", value: 2, colorSlots: 1, hasSpeed: true },
+    { name: "Comet Trail", value: 3, colorSlots: 1, hasSpeed: true },
   ],
 };

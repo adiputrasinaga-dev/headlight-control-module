@@ -45,4 +45,4 @@ namespace SeinEffects
         }
     }
 
-} // namespace SeinEffects
+}

@@ -1,17 +1,17 @@
 /*
  * ===================================================================
- * AERI LIGHT v19.5 - APP.JS (OFFLINE SIMULATION FIX)
+ * AERI LIGHT v19.6 - APP.JS (CLASSIC SCRIPT LOADING)
  * ===================================================================
  * Deskripsi Perubahan:
- * - FIX: Bug di mana aplikasi tidak interaktif saat "Disconnected".
- * - REWORK: Mengimplementasikan pola "Optimistic UI" dengan benar.
- * Perubahan pada UI kini diterapkan secara lokal terlebih dahulu,
- * kemudian perintah dikirim ke perangkat hanya jika terhubung.
- * - Ini membuat mode offline berfungsi penuh sebagai simulator.
+ * - REFACTOR: Menghapus `import` statement. Aplikasi kini mengandalkan
+ * `config.js` untuk membuat variabel global `AppConfig` yang dimuat
+ * terlebih dahulu oleh index.html. Ini adalah metode yang lebih
+ * andal untuk lingkungan ESP32.
  * ===================================================================
  */
 
-import AppConfig from "./config.js";
+// Konfigurasi akan dimuat dari config.js melalui tag <script> di index.html
+// Ini membuat variabel global `AppConfig` tersedia.
 
 document.addEventListener("DOMContentLoaded", () => {
   const App = {
@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
       appState: {},
       presets: [],
     },
+    // Menggunakan konfigurasi yang sudah dimuat dari config.js
     config: AppConfig,
 
     elements: {},
@@ -103,26 +104,10 @@ document.addEventListener("DOMContentLoaded", () => {
         <div id="${sysKey}-controls" class="control-set">
           ${panelInfoHTML}
           <div class="control-group"><label class="control-label">TARGET</label><div class="segmented-control" data-target-group="${sysKey}"><button class="sg-btn" data-value="kiri" title="Hanya Kiri">${svgLeft}</button><button class="sg-btn active" data-value="keduanya" title="Kiri & Kanan">${svgBoth}</button><button class="sg-btn" data-value="kanan" title="Hanya Kanan">${svgRight}</button></div></div>
-          
-          <div class="control-group">
-            <label>MODE EFEK</label>
-            <select id="${sysKey}Mode" class="cyber-input"></select>
-          </div>
-          
-          <div class="control-group">
-            <label>WARNA</label>
-            <div id="${sysKey}-color-bar" class="color-bar-container"></div>
-          </div>
-          
-          <div id="${sysKey}-speed-control-wrapper" class="control-group">
-            <div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div>
-            <input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" />
-          </div>
-
-          <div class="control-group">
-            <div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div>
-            <input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" />
-          </div>
+          <div class="control-group"><label>MODE EFEK</label><select id="${sysKey}Mode" class="cyber-input"></select></div>
+          <div class="control-group"><label>WARNA</label><div id="${sysKey}-color-bar" class="color-bar-container"></div></div>
+          <div id="${sysKey}-speed-control-wrapper" class="control-group"><div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div><input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" /></div>
+          <div class="control-group"><div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div><input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" /></div>
         </div>`;
     },
 

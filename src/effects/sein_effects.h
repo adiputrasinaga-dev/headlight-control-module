@@ -19,4 +19,4 @@ namespace SeinEffects
     void cometTrail(SeinEffectParams &params);
 }
 
-#endif // SEIN_EFFECTS_H
+#endif

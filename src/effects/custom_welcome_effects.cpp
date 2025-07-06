@@ -3,12 +3,12 @@
  * AERI LIGHT - CUSTOM WELCOME EFFECTS IMPLEMENTATION
  * ===================================================================
  * Deskripsi:
- * v19.2: Memperbaiki panggilan fungsi `fill_gradient_RGB` dengan
- * menambahkan namespace `fl::`.
+ * v19.2: Memperbaiki panggilan fungsi `fill_gradient_RGB` dan
+ * membungkus semua fungsi dalam namespace.
  * ===================================================================
  */
 
-#include "effects/custom_welcome_effects.h"
+#include "custom_welcome_effects.h"
 
 namespace CustomWelcomeEffects
 {
@@ -73,7 +73,7 @@ namespace CustomWelcomeEffects
             uint8_t val1 = sin8(i * 10 + t);
             uint8_t val2 = cos8(i * 10 + t);
             CRGB c1 = params.color1;
-            CRGB c2 = params.color2; // Sekarang sudah valid
+            CRGB c2 = params.color2;
             params.leds[i] = blend(c1.nscale8(val1), c2.nscale8(val2), 128);
         }
     }

@@ -1,12 +1,13 @@
 /*
  * ===================================================================
- * AERI LIGHT v19.2 - FIRMWARE (FULLY MODULAR & FINAL)
+ * AERI LIGHT v19.3 - FIRMWARE (COMPILATION FIXES)
  * ===================================================================
  * Deskripsi:
- * Versi firmware final yang sepenuhnya modular. Semua logika efek
- * kini berada di dalam sub-folder `src/effects/` dan dipanggil
- * melalui Effect Registry. Struktur ini sangat bersih, stabil, dan
- * mudah untuk diperluas di masa depan.
+ * Memperbaiki semua error kompilasi yang dilaporkan:
+ * 1. Mengatasi 'narrowing conversion' dengan casting eksplisit.
+ * 2. Mengatasi 'uninitialized reference' dengan menyediakan semua
+ * parameter warna yang dibutuhkan.
+ * 3. Memperbaiki pemanggilan fungsi agar sesuai dengan namespace.
  * ===================================================================
  */
 
@@ -16,7 +17,7 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <Preferences.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <ArduinoJson.h>
 
 // --- File Efek Modular ---
@@ -135,9 +136,9 @@ void deserializeLightConfig(const JsonObject &obj, LightConfig &config);
 void setup()
 {
   Serial.begin(115200);
-  if (!SPIFFS.begin(true))
+  if (!LittleFS.begin(true))
   {
-    Serial.println("SPIFFS Mount Failed");
+    Serial.println("LittleFS Mount Failed");
     return;
   }
 
@@ -162,7 +163,7 @@ void setup()
   Serial.print("AP IP address: ");
   Serial.println(WiFi.softAPIP());
 
-  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+  server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
   server.on("/get-state", HTTP_GET, handleGetState);
   server.on("/set-config", HTTP_POST, handleSetConfig);
   server.on("/set-mode-alis", HTTP_POST, [](AsyncWebServerRequest *request)
@@ -287,7 +288,9 @@ void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
       CRGB c1 = state.warna;
       CRGB c2 = state.warna2;
       CRGB c3 = state.warna3;
-      EffectParams params = {leds, count, animStep, map(config.speed, 0, 100, 1, 15), c1, c2, c3};
+      // PERBAIKAN: Mengatasi warning narrowing conversion
+      uint8_t mapped_speed = (uint8_t)map(config.speed, 0, 100, 1, 15);
+      EffectParams params = {leds, count, animStep, mapped_speed, c1, c2, c3};
       effectRegistry[state.modeEfek](params);
     }
   };
@@ -356,7 +359,9 @@ void jalankanModeWelcome()
   {
     CRGB c1 = alisConfig.stateKiri.warna;
     CRGB c2 = alisConfig.stateKiri.warna2;
-    WelcomeEffectParams params = {ledsAlisKiri, count, elapsed, duration, c1, c2};
+    CRGB c3 = alisConfig.stateKiri.warna3;
+    // PERBAIKAN: Menyediakan semua parameter yang dibutuhkan
+    WelcomeEffectParams params = {ledsAlisKiri, count, elapsed, duration, c1, c2, c3};
     welcomeEffectRegistry[globalConfig.modeWelcome](params);
   }
 
@@ -543,9 +548,9 @@ void handleReset(AsyncWebServerRequest *request)
 }
 void initializePresets()
 {
-  if (!SPIFFS.exists("/presets.json"))
+  if (!LittleFS.exists("/presets.json"))
   {
-    File f = SPIFFS.open("/presets.json", "w");
+    File f = LittleFS.open("/presets.json", "w");
     if (!f)
       return;
     JsonDocument d;
@@ -563,7 +568,7 @@ void initializePresets()
 }
 void handleGetPresets(AsyncWebServerRequest *request)
 {
-  request->send(SPIFFS, "/presets.json", "application/json");
+  request->send(LittleFS, "/presets.json", "application/json");
 }
 void handleSavePreset(AsyncWebServerRequest *request)
 {
@@ -571,7 +576,7 @@ void handleSavePreset(AsyncWebServerRequest *request)
   {
     int s = request->getParam("slot", true)->value().toInt();
     String n = request->getParam("name", true)->value();
-    File f = SPIFFS.open("/presets.json", "r");
+    File f = LittleFS.open("/presets.json", "r");
     if (!f)
     {
       request->send(500, "text/plain", "Gagal buka presets");
@@ -619,7 +624,7 @@ void handleSavePreset(AsyncWebServerRequest *request)
     c.add(seinConfig.warna.r);
     c.add(seinConfig.warna.g);
     c.add(seinConfig.warna.b);
-    f = SPIFFS.open("/presets.json", "w");
+    f = LittleFS.open("/presets.json", "w");
     if (serializeJson(d, f) == 0)
     {
       request->send(500, "text/plain", "Gagal tulis presets");
@@ -640,7 +645,7 @@ void handleLoadPreset(AsyncWebServerRequest *request)
   if (request->hasParam("slot", true))
   {
     int s = request->getParam("slot", true)->value().toInt();
-    File f = SPIFFS.open("/presets.json", "r");
+    File f = LittleFS.open("/presets.json", "r");
     if (!f)
     {
       request->send(500, "text/plain", "Gagal buka presets");

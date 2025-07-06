@@ -6,10 +6,10 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="description" content="AERI LIGHT Production Release v17.2" />
+    <meta name="description" content="AERI LIGHT Production Release" />
     <meta name="theme-color" id="theme-color-meta" content="#E60023" />
     <link rel="manifest" href="/manifest.json" />
-    <title>AERI LIGHT // v17.2</title>
+    <title>AERI LIGHT</title>
     <link rel="stylesheet" href="style.css" />
     <script src="iro.min.js"></script>
     <link rel="apple-touch-icon" href="icons/icon-192x192.png" />
@@ -21,8 +21,8 @@
       <div class="modal-content">
         <h3>Konfirmasi Reset Pabrik</h3>
         <p>
-          Aksi ini tidak dapat dibatalkan. Semua pengaturan yang tersimpan akan
-          dihapus. Ketik "RESET" untuk mengonfirmasi.
+          Aksi ini tidak dapat dibatalkan. Semua pengaturan akan dihapus. Ketik
+          "RESET" untuk mengonfirmasi.
         </p>
         <input
           type="text"
@@ -42,63 +42,10 @@
     <div id="color-picker-modal" class="modal-backdrop" style="display: none">
       <div class="modal-content modal-color-picker">
         <h3>Pilih Warna</h3>
-        <div id="modalColorPreview" class="modal-color-preview"></div>
         <div
           id="modalColorPickerContainer"
           class="color-picker-container"
         ></div>
-        <div class="control-group">
-          <label>BRIGHTNESS</label>
-          <input
-            type="range"
-            id="modalBrightnessSlider"
-            class="local-slider"
-            min="0"
-            max="100"
-            value="100"
-          />
-        </div>
-        <div class="modal-input-group">
-          <div class="input-wrapper hex-input">
-            <label for="modalHexInput">HEX</label>
-            <input
-              type="text"
-              id="modalHexInput"
-              class="cyber-input-small"
-              maxlength="7"
-            />
-          </div>
-          <div class="input-wrapper">
-            <label for="modalRedInput">R</label>
-            <input
-              type="number"
-              id="modalRedInput"
-              class="cyber-input-small"
-              min="0"
-              max="255"
-            />
-          </div>
-          <div class="input-wrapper">
-            <label for="modalGreenInput">G</label>
-            <input
-              type="number"
-              id="modalGreenInput"
-              class="cyber-input-small"
-              min="0"
-              max="255"
-            />
-          </div>
-          <div class="input-wrapper">
-            <label for="modalBlueInput">B</label>
-            <input
-              type="number"
-              id="modalBlueInput"
-              class="cyber-input-small"
-              min="0"
-              max="255"
-            />
-          </div>
-        </div>
         <div class="modal-actions">
           <button id="btnModalBatal" class="btn btn-secondary">Batal</button>
           <button id="btnModalSimpan" class="btn">Simpan</button>
@@ -136,10 +83,11 @@
           <div class="panel-body">
             <div class="sync-toggle-container">
               <label for="syncSwitch">SINKRONKAN (ALIS, SHROUD, DEMON)</label>
-              <label class="switch">
-                <input type="checkbox" id="syncSwitch" />
-                <span class="slider round"></span>
-              </label>
+              <label class="switch"
+                ><input type="checkbox" id="syncSwitch" /><span
+                  class="slider round"
+                ></span
+              ></label>
             </div>
             <div class="radio-group system-selector">
               <input
@@ -168,7 +116,6 @@
                 value="sein"
               /><label for="controlTargetSein">SEIN</label>
             </div>
-
             <div id="alis-controls-container"></div>
             <div id="shroud-controls-container"></div>
             <div id="demon-controls-container"></div>
@@ -184,15 +131,15 @@
           </summary>
           <div class="panel-body">
             <div class="control-group">
-              <label for="presetSlot">PILIH SLOT PRESET</label>
-              <select id="presetSlot" class="cyber-input"></select>
+              <label for="presetSlot">PILIH SLOT PRESET</label
+              ><select id="presetSlot" class="cyber-input"></select>
             </div>
             <div id="preset-preview" class="preset-preview-container">
               <p>Pilih slot untuk melihat pratinjau...</p>
             </div>
             <div class="control-group">
-              <label for="presetName">NAMA PRESET</label>
-              <input
+              <label for="presetName">NAMA PRESET</label
+              ><input
                 type="text"
                 id="presetName"
                 class="cyber-input"
@@ -200,8 +147,8 @@
               />
             </div>
             <div class="modal-actions">
-              <button id="btnLoadPreset" class="btn">Muat Preset</button>
-              <button id="btnSavePreset" class="btn">Simpan Preset</button>
+              <button id="btnLoadPreset" class="btn">Muat Preset</button
+              ><button id="btnSavePreset" class="btn">Simpan Preset</button>
             </div>
           </div>
         </details>
@@ -219,20 +166,20 @@
                   name="ledTarget"
                   value="alis"
                   checked
-                /><label for="ledTargetAlis">ALIS</label>
-                <input
+                /><label for="ledTargetAlis">ALIS</label
+                ><input
                   type="radio"
                   id="ledTargetShroud"
                   name="ledTarget"
                   value="shroud"
-                /><label for="ledTargetShroud">SHROUD</label>
-                <input
+                /><label for="ledTargetShroud">SHROUD</label
+                ><input
                   type="radio"
                   id="ledTargetDemon"
                   name="ledTarget"
                   value="demon"
-                /><label for="ledTargetDemon">DEMON</label>
-                <input
+                /><label for="ledTargetDemon">DEMON</label
+                ><input
                   type="radio"
                   id="ledTargetSein"
                   name="ledTarget"
@@ -241,8 +188,8 @@
               </div>
             </div>
             <div class="control-group">
-              <label for="ledCount">Jumlah LED (Per Sisi)</label>
-              <input
+              <label for="ledCount">Jumlah LED (Per Sisi)</label
+              ><input
                 type="number"
                 id="ledCount"
                 min="0"
@@ -253,9 +200,8 @@
             </div>
             <div class="modal-actions">
               <button id="btnPreviewLedCount" class="btn btn-secondary">
-                Preview
-              </button>
-              <button id="btnSaveLedCount" class="btn">Simpan</button>
+                Preview</button
+              ><button id="btnSaveLedCount" class="btn">Simpan</button>
             </div>
           </div>
         </details>
@@ -265,25 +211,23 @@
           </summary>
           <div class="panel-body">
             <div class="control-group">
-              <label for="welcomeMode">PILIH ANIMASI</label>
-              <select id="welcomeMode" class="cyber-input" disabled></select>
+              <label for="welcomeMode">PILIH ANIMASI</label
+              ><select id="welcomeMode" class="cyber-input"></select>
             </div>
             <div class="control-group">
-              <label for="welcomeDuration">DURASI (detik)</label>
-              <input
+              <label for="welcomeDuration">DURASI (detik)</label
+              ><input
                 type="number"
                 id="welcomeDuration"
                 min="1"
                 max="60"
                 class="cyber-input"
-                disabled
               />
             </div>
             <div class="modal-actions">
               <button id="btnPreviewWelcome" class="btn btn-secondary">
-                Preview
-              </button>
-              <button id="btnSaveWelcome" class="btn">Simpan</button>
+                Preview</button
+              ><button id="btnSaveWelcome" class="btn">Simpan</button>
             </div>
           </div>
         </details>
@@ -299,6 +243,8 @@
       </div>
     </main>
 
+    <!-- PERBAIKAN: Memuat config.js terlebih dahulu, lalu app.js tanpa type="module" -->
+    <script src="config.js"></script>
     <script src="app.js"></script>
     <script>
       if ("serviceWorker" in navigator) {
