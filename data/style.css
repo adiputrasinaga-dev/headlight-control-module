@@ -1,22 +1,13 @@
 /*
  * ===================================================================
- * AERI LIGHT v18.1 - STYLESHEET (UI BUG FIXES)
+ * AERI LIGHT v17.4 - STYLESHEET (DARK MODE ONLY)
  * ===================================================================
- * Rilis Perbaikan oleh Fullstack & UI/UX Expert
- *
- * DESKRIPSI PERBAIKAN:
- * 1.  [BUG FIX] Celah pada Tombol Tipe Efek:
- * - Aturan styling untuk .radio-group dan .segmented-control telah
- * disempurnakan untuk memastikan tidak ada "potongan" atau celah
- * visual saat segmen kanan aktif. Bentuk kini sepenuhnya
- * dikontrol oleh parent container.
- *
- * 2.  [BUG FIX] Jarak Vertikal Tidak Konsisten:
- * - Margin eksplisit ditambahkan untuk menonaktifkan spasi yang tidak
- * diinginkan pada .effect-details-wrapper. Spasi antar elemen
- * kini sepenuhnya dikontrol oleh properti 'gap' pada flex container,
- * mencegah layout "melompat".
- *
+ * Deskripsi Perubahan:
+ * 1.  Light Mode Dihapus: Menghapus semua variabel dan aturan CSS
+ * untuk tema terang.
+ * 2.  Theme Switcher Dihapus: Menghapus styling untuk toggle switch.
+ * 3.  Penyederhanaan: Kode CSS menjadi lebih ringkas dan fokus
+ * pada satu tema saja.
  * ===================================================================
  */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700&display=swap");
@@ -37,23 +28,6 @@
   --info-color: #7f848e;
   --input-bg: rgba(16, 17, 20, 0.8);
   --divider-color: rgba(255, 255, 255, 0.1);
-}
-
-html[data-theme="light"] {
-  --bg-color: #f0f2f5;
-  --panel-bg: #ffffff;
-  --primary-accent: #d32f2f;
-  --primary-glow: rgba(211, 47, 47, 0.4);
-  --secondary-accent: #5f6368;
-  --secondary-glow: rgba(95, 99, 104, 0.3);
-  --text-color: #202124;
-  --text-muted: #5f6368;
-  --border-color: rgba(211, 47, 47, 0.3);
-  --success-color: #00c853;
-  --error-color: #d32f2f;
-  --info-color: #5f6368;
-  --input-bg: #e8eaed;
-  --divider-color: rgba(0, 0, 0, 0.1);
 }
 
 /* --- Base, Typography & Layout Fixes --- */
@@ -237,6 +211,9 @@ details[open] > summary {
   flex-direction: column;
 }
 
+.panel-body > *:not(:first-child) {
+  margin-top: 30px;
+}
 .control-group {
   display: flex;
   flex-direction: column;
@@ -271,13 +248,6 @@ details[open] > summary {
   display: flex;
 }
 
-/* ### BUG FIX: Spasi Vertikal ### */
-/* Mengatur margin wrapper secara eksplisit untuk mencegah lompatan layout */
-.effect-details-wrapper {
-  margin: 0;
-}
-/* ############################## */
-
 .btn {
   background-color: transparent;
   color: var(--primary-accent);
@@ -300,9 +270,7 @@ details[open] > summary {
 }
 .btn:hover:not(:disabled) {
   background-color: var(--primary-accent);
-  color: var(
-    --bg-color
-  ) !important; /* Important needed to override more specific selectors */
+  color: var(--bg-color) !important;
   transform: translateY(-2px);
   box-shadow: 0 0 20px 5px var(--primary-glow);
 }
@@ -366,14 +334,12 @@ input:focus {
   box-shadow: 0 0 10px var(--secondary-glow);
 }
 
-/* ### BUG FIX: Celah Tombol ### */
-/* Bentuk dikontrol oleh parent, anak-anaknya hanya mengisi ruang */
 .radio-group,
 .segmented-control {
   display: flex;
   border: 1px solid var(--border-color);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
-  overflow: hidden; /* Penting untuk memotong anak-anaknya */
+  overflow: hidden;
 }
 .radio-group label,
 .segmented-control .sg-btn {
@@ -384,8 +350,7 @@ input:focus {
   font-weight: 700;
   transition: all 0.2s ease-in-out;
   background-color: transparent;
-  border: none; /* Tidak ada border individu */
-  border-radius: 0; /* Tidak ada radius individu */
+  border: none;
   color: var(--text-muted);
 }
 .radio-group input[type="radio"],
@@ -398,13 +363,10 @@ input:focus {
   color: var(--bg-color);
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
 }
-/* Hanya tambahkan garis pemisah, bukan border penuh */
 .radio-group label:not(:last-of-type),
 .segmented-control .sg-btn:not(:last-of-type) {
   border-right: 1px solid var(--border-color);
 }
-/* ############################## */
-
 .segmented-control .sg-btn svg {
   width: 24px;
   height: 24px;
@@ -520,7 +482,7 @@ input:checked + .slider:before {
   height: 100%;
   background-color: rgba(0, 0, 0, 0.8);
   z-index: 5000;
-  display: none; /* Default to hidden */
+  display: flex;
   justify-content: center;
   align-items: center;
   backdrop-filter: blur(5px);
@@ -707,51 +669,6 @@ input:checked + .slider:before {
   border-color: var(--info-color);
 }
 
-/* ===== Theme Switcher ===== */
-.theme-switcher-container {
-  position: absolute;
-  right: 15px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-.theme-switcher-label {
-  width: 50px;
-  height: 26px;
-  background-color: var(--input-bg);
-  border: 1px solid var(--text-muted);
-  border-radius: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px;
-  cursor: pointer;
-  position: relative;
-  transition: background-color 0.3s;
-}
-.theme-switcher-label::after {
-  /* The moving ball */
-  content: "";
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background-color: var(--secondary-accent);
-  left: 3px;
-  transition: transform 0.3s ease;
-}
-.theme-switcher-checkbox {
-  display: none;
-}
-.theme-switcher-checkbox:checked + .theme-switcher-label::after {
-  transform: translateX(24px);
-}
-.theme-switcher-label svg {
-  width: 18px;
-  height: 18px;
-  color: var(--secondary-accent);
-}
-
-/* Preset Preview Styling */
 .preset-preview-container {
   background-color: rgba(0, 0, 0, 0.2);
   border-left: 3px solid var(--secondary-accent);
@@ -760,7 +677,7 @@ input:checked + .slider:before {
   margin-bottom: 10px;
   border-radius: 4px;
   transition: all 0.3s ease;
-  min-height: 60px; /* Memberi ruang agar tidak 'loncat' saat loading */
+  min-height: 60px;
 }
 
 .preset-preview-container h4 {
