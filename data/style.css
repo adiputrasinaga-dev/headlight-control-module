@@ -1,13 +1,15 @@
 /*
  * ===================================================================
- * AERI LIGHT v17.4 - STYLESHEET (DARK MODE ONLY)
+ * AERI LIGHT v17.9 - STYLESHEET (UI GAP FIXED)
  * ===================================================================
  * Deskripsi Perubahan:
- * 1.  Light Mode Dihapus: Menghapus semua variabel dan aturan CSS
- * untuk tema terang.
- * 2.  Theme Switcher Dihapus: Menghapus styling untuk toggle switch.
- * 3.  Penyederhanaan: Kode CSS menjadi lebih ringkas dan fokus
- * pada satu tema saja.
+ * 1.  Perbaikan Bug UI: Menghilangkan celah (gap) vertikal yang tidak
+ * konsisten di antara grup kontrol.
+ * 2.  Modernisasi CSS: Mengganti selector `> *:not(:first-child)`
+ * dengan properti `gap` pada flex container `.panel-body` untuk
+ * spacing yang lebih baik dan dapat diprediksi.
+ * 3.  Penyederhanaan: Menghapus kelas `.active` dari `.control-set`
+ * karena visibilitas kini dikontrol oleh kontainer induknya.
  * ===================================================================
  */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700&display=swap");
@@ -209,11 +211,9 @@ details[open] > summary {
 .panel-body {
   display: flex;
   flex-direction: column;
+  gap: 30px;
 }
 
-.panel-body > *:not(:first-child) {
-  margin-top: 30px;
-}
 .control-group {
   display: flex;
   flex-direction: column;
@@ -240,12 +240,10 @@ details[open] > summary {
   align-items: baseline;
 }
 .control-set {
-  display: none;
+  /* PERBAIKAN: .active tidak lagi diperlukan, set display ke flex */
+  display: flex;
   flex-direction: column;
   gap: 30px;
-}
-.control-set.active {
-  display: flex;
 }
 
 .btn {
@@ -419,7 +417,6 @@ input[type="range"]::-moz-range-thumb {
   padding: 15px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--border-color);
-  margin-bottom: 25px;
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
 }
 .sync-toggle-container > label {
@@ -673,8 +670,6 @@ input:checked + .slider:before {
   background-color: rgba(0, 0, 0, 0.2);
   border-left: 3px solid var(--secondary-accent);
   padding: 15px;
-  margin-top: 10px;
-  margin-bottom: 10px;
   border-radius: 4px;
   transition: all 0.3s ease;
   min-height: 60px;

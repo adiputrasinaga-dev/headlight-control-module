@@ -1,15 +1,13 @@
 /*
  * ===================================================================
- * AERI LIGHT v17.5 - APP.JS (IMPLEMENTASI PRESET)
+ * AERI LIGHT v17.9 - APP.JS (UI GAP FIX)
  * ===================================================================
  * Deskripsi Perubahan:
- * - Logika untuk tombol 'Simpan Preset' dan 'Muat Preset' telah
- * diimplementasikan sepenuhnya.
- * - Logika pratinjau preset diperbaiki untuk mengambil data dari
- * endpoint yang benar.
- * - Setelah memuat preset, aplikasi akan otomatis mengambil state
- * terbaru dan memperbarui seluruh UI.
- * - Menambahkan feedback (toast) untuk setiap aksi preset.
+ * - Memperbaiki logika pada fungsi `renderActiveControl` untuk menyembunyikan
+ * seluruh kontainer kontrol (cth: #alis-controls-container) bukan
+ * hanya elemen di dalamnya.
+ * - Perbaikan ini memastikan properti 'gap' pada CSS dapat bekerja
+ * dengan benar dan menghilangkan celah vertikal yang tidak diinginkan.
  * ===================================================================
  */
 document.addEventListener("DOMContentLoaded", () => {
@@ -20,10 +18,10 @@ document.addEventListener("DOMContentLoaded", () => {
       isDemoMode: false,
       activeSystemForModal: null,
       activeColorSlot: 1,
-      activeColorContext: "static", // Konteks: 'static' atau 'dynamic'
+      activeColorContext: "static",
       activeToastTimer: null,
       appState: {},
-      presets: [], // Untuk menyimpan data preset
+      presets: [],
     },
     config: {
       debounceDelay: 250,
@@ -57,7 +55,6 @@ document.addEventListener("DOMContentLoaded", () => {
     elements: {},
     modalColorPicker: null,
 
-    // --- INISIALISASI ---
     init() {
       this.cacheInitialElements();
       this.modalColorPicker = new iro.ColorPicker(
@@ -75,11 +72,10 @@ document.addEventListener("DOMContentLoaded", () => {
       this.bindEvents();
       this.populateDropdowns();
       this.fetchInitialState().then(() => {
-        this.populatePresetSlots(); // Panggil setelah state awal didapat
+        this.populatePresetSlots();
       });
     },
 
-    // --- PENGATURAN AWAL & PEMBUATAN UI ---
     cacheInitialElements() {
       this.elements = {
         toastContainer: document.getElementById("toast-container"),
@@ -104,7 +100,6 @@ document.addEventListener("DOMContentLoaded", () => {
           btnBatal: document.getElementById("btnModalBatal"),
           btnSimpan: document.getElementById("btnModalSimpan"),
         },
-        // Elemen Preset
         presetSlot: document.getElementById("presetSlot"),
         presetName: document.getElementById("presetName"),
         presetPreview: document.getElementById("preset-preview"),
@@ -129,26 +124,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const svgLeft = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M15.25 4.75a.75.75 0 00-1.06 0L8.72 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L10.31 11l5.94-5.19a.75.75 0 000-1.06z"></path></svg>`;
       const svgBoth = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8.75 4.75a.75.75 0 00-1.06 0L2.22 10.22a.75.75 0 000 1.06l5.47 5.47a.75.75 0 101.06-1.06L3.31 11l5.94-5.19a.75.75 0 000-1.06zm6.5 0a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L20.69 11l-5.94-5.19a.75.75 0 010-1.06z"></path></svg>`;
       const svgRight = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8.75 4.75a.75.75 0 011.06 0l5.47 5.47a.75.75 0 010 1.06l-5.47 5.47a.75.75 0 11-1.06-1.06L13.69 11l-5.94-5.19a.75.75 0 010-1.06z"></path></svg>`;
-      return `
-          <div id="${sysKey}-controls" class="control-set">
-            ${panelInfoHTML} 
-            <div class="control-group"><label class="control-label">TARGET</label><div class="segmented-control" data-target-group="${sysKey}"><button class="sg-btn" data-value="kiri" title="Hanya Kiri">${svgLeft}</button><button class="sg-btn active" data-value="keduanya" title="Kiri & Kanan">${svgBoth}</button><button class="sg-btn" data-value="kanan" title="Hanya Kanan">${svgRight}</button></div></div>
-            <div class="control-group"><label class="control-label">TIPE EFEK</label><div class="radio-group" data-type-group="${sysKey}"><input type="radio" id="${sysKey}EffectTypeStatic" name="${sysKey}EffectType" value="static" checked/><label for="${sysKey}EffectTypeStatic">Statis</label><input type="radio" id="${sysKey}EffectTypeDynamic" name="${sysKey}EffectType" value="dynamic"/><label for="${sysKey}EffectTypeDynamic">Dinamis</label></div></div>
-            <div class="effect-details-wrapper">
-                <div class="static-color-section"><div class="control-group"><label>WARNA SOLID</label><div id="${sysKey}ColorPreviewStatic" class="color-preview-box" title="Klik untuk mengubah warna"><span id="${sysKey}ColorHexStatic" class="color-hex-value">#RRGGBB</span></div></div></div>
-                <div class="dynamic-controls"><div class="dynamic-color-previews-container"><div class="control-group" id="${sysKey}-dynamic-color-group-1" style="display: none;"><label>WARNA 1</label><div id="${sysKey}ColorPreviewDynamic1" class="color-preview-box" title="Klik untuk mengubah Warna 1"><span id="${sysKey}ColorHexDynamic1" class="color-hex-value">#RRGGBB</span></div></div><div class="control-group" id="${sysKey}-dynamic-color-group-2" style="display: none;"><label>WARNA 2</label><div id="${sysKey}ColorPreviewDynamic2" class="color-preview-box" title="Klik untuk mengubah Warna 2"><span id="${sysKey}ColorHexDynamic2" class="color-hex-value">#RRGGBB</span></div></div><div class="control-group" id="${sysKey}-dynamic-color-group-3" style="display: none;"><label>WARNA 3</label><div id="${sysKey}ColorPreviewDynamic3" class="color-preview-box" title="Klik untuk mengubah Warna 3"><span id="${sysKey}ColorHexDynamic3" class="color-hex-value">#RRGGBB</span></div></div></div><div class="control-group"><label>MODE EFEK</label><select id="${sysKey}Mode" class="cyber-input" disabled></select></div><div class="control-group speed-group"><div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div><input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" disabled /></div></div>
-            </div>
-            <div class="control-group"><div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div><input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" disabled /></div>
-          </div>`;
+      return `<div id="${sysKey}-controls" class="control-set">${panelInfoHTML}<div class="control-group"><label class="control-label">TARGET</label><div class="segmented-control" data-target-group="${sysKey}"><button class="sg-btn" data-value="kiri" title="Hanya Kiri">${svgLeft}</button><button class="sg-btn active" data-value="keduanya" title="Kiri & Kanan">${svgBoth}</button><button class="sg-btn" data-value="kanan" title="Hanya Kanan">${svgRight}</button></div></div><div class="control-group"><label class="control-label">TIPE EFEK</label><div class="radio-group" data-type-group="${sysKey}"><input type="radio" id="${sysKey}EffectTypeStatic" name="${sysKey}EffectType" value="static" checked/><label for="${sysKey}EffectTypeStatic">Statis</label><input type="radio" id="${sysKey}EffectTypeDynamic" name="${sysKey}EffectType" value="dynamic"/><label for="${sysKey}EffectTypeDynamic">Dinamis</label></div></div><div class="effect-details-wrapper"><div class="static-color-section"><div class="control-group"><label>WARNA SOLID</label><div id="${sysKey}ColorPreviewStatic" class="color-preview-box" title="Klik untuk mengubah warna"><span id="${sysKey}ColorHexStatic" class="color-hex-value">#RRGGBB</span></div></div></div><div class="dynamic-controls"><div class="dynamic-color-previews-container"><div class="control-group" id="${sysKey}-dynamic-color-group-1" style="display: none;"><label>WARNA 1</label><div id="${sysKey}ColorPreviewDynamic1" class="color-preview-box" title="Klik untuk mengubah Warna 1"><span id="${sysKey}ColorHexDynamic1" class="color-hex-value">#RRGGBB</span></div></div><div class="control-group" id="${sysKey}-dynamic-color-group-2" style="display: none;"><label>WARNA 2</label><div id="${sysKey}ColorPreviewDynamic2" class="color-preview-box" title="Klik untuk mengubah Warna 2"><span id="${sysKey}ColorHexDynamic2" class="color-hex-value">#RRGGBB</span></div></div><div class="control-group" id="${sysKey}-dynamic-color-group-3" style="display: none;"><label>WARNA 3</label><div id="${sysKey}ColorPreviewDynamic3" class="color-preview-box" title="Klik untuk mengubah Warna 3"><span id="${sysKey}ColorHexDynamic3" class="color-hex-value">#RRGGBB</span></div></div></div><div class="control-group"><label>MODE EFEK</label><select id="${sysKey}Mode" class="cyber-input" disabled></select></div><div class="control-group speed-group"><div class="slider-label-container"><label>SPEED</label><span id="${sysKey}SpeedValue">--%</span></div><input type="range" id="${sysKey}Speed" class="local-slider" min="0" max="100" value="50" disabled /></div></div></div><div class="control-group"><div class="slider-label-container"><label>BRIGHTNESS</label><span id="${sysKey}BrightnessValue">--%</span></div><input type="range" id="${sysKey}Brightness" class="local-slider" min="0" max="100" value="80" disabled /></div></div>`;
     },
 
     getSeinControlHTML() {
-      return `
-        <div id="sein-controls" class="control-set">
-            <div class="static-color-section" style="display: block;"><div class="control-group"><label>WARNA SOLID</label><div id="seinColorPreview" class="color-preview-box" title="Klik untuk mengubah warna"><span id="seinColorHex" class="color-hex-value">#RRGGBB</span></div></div></div>
-            <div class="control-group"><label>PILIH EFEK SEIN</label><select id="seinModeSettings" class="cyber-input" disabled></select></div>
-            <div class="control-group"><div class="slider-label-container"><label>SPEED</label><span id="seinSpeedValue">--%</span></div><input type="range" id="seinSpeed" class="local-slider" min="0" max="100" value="50" disabled /></div>
-        </div>`;
+      return `<div id="sein-controls" class="control-set"><div class="static-color-section" style="display: block;"><div class="control-group"><label>WARNA SOLID</label><div id="seinColorPreview" class="color-preview-box" title="Klik untuk mengubah warna"><span id="seinColorHex" class="color-hex-value">#RRGGBB</span></div></div></div><div class="control-group"><label>PILIH EFEK SEIN</label><select id="seinModeSettings" class="cyber-input" disabled></select></div><div class="control-group"><div class="slider-label-container"><label>SPEED</label><span id="seinSpeedValue">--%</span></div><input type="range" id="seinSpeed" class="local-slider" min="0" max="100" value="50" disabled /></div></div>`;
     },
 
     cacheDynamicElements() {
@@ -174,7 +154,6 @@ document.addEventListener("DOMContentLoaded", () => {
           "info"
         );
       });
-
       this.elements.systemSelector.forEach((radio) =>
         radio.addEventListener("change", () => this.renderActiveControl())
       );
@@ -184,7 +163,6 @@ document.addEventListener("DOMContentLoaded", () => {
       this.elements.hamburgerBtn.addEventListener("click", () =>
         this.elements.mobileMenu.classList.toggle("open")
       );
-
       this.elements.colorPickerModal.btnBatal.addEventListener(
         "click",
         () => (this.elements.colorPickerModal.backdrop.style.display = "none")
@@ -192,7 +170,6 @@ document.addEventListener("DOMContentLoaded", () => {
       this.elements.colorPickerModal.btnSimpan.addEventListener("click", () =>
         this.handleColorPickerSave()
       );
-
       this.elements.resetModal.cancelBtn.addEventListener("click", () =>
         this.closeResetModal()
       );
@@ -205,7 +182,6 @@ document.addEventListener("DOMContentLoaded", () => {
       this.elements.resetModal.confirmBtn.addEventListener("click", () =>
         this.handleResetConfirm()
       );
-
       const btnReset = document.getElementById("btnReset");
       if (btnReset) {
         btnReset.addEventListener(
@@ -213,11 +189,8 @@ document.addEventListener("DOMContentLoaded", () => {
           () => (this.elements.resetModal.backdrop.style.display = "flex")
         );
       }
-
       this.config.systems.forEach((sys) => this.bindControlEvents(sys));
       this.bindSeinEvents();
-
-      // --- Event Listener untuk Preset ---
       this.elements.presetSlot.addEventListener("change", () =>
         this.updatePresetPreview()
       );
@@ -510,17 +483,22 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
+    // --- PERBAIKAN DI SINI ---
     renderActiveControl() {
       const activeControl = document.querySelector(
         'input[name="controlTarget"]:checked'
       ).value;
-      this.config.systems.forEach((sys) => {
-        const container = document.getElementById(`${sys}-controls`);
-        if (container)
-          container.style.display = sys === activeControl ? "flex" : "none";
+      // Gabungkan semua nama sistem kontrol ke dalam satu array
+      const allControlSystems = [...this.config.systems, "sein"];
+
+      allControlSystems.forEach((sys) => {
+        // Target elemen kontainer terluar, bukan elemen di dalamnya
+        const container = document.getElementById(`${sys}-controls-container`);
+        if (container) {
+          // Tampilkan kontainer jika cocok, sembunyikan jika tidak
+          container.style.display = sys === activeControl ? "block" : "none";
+        }
       });
-      document.getElementById("sein-controls").style.display =
-        activeControl === "sein" ? "flex" : "none";
     },
 
     updateConnectionStatus(isConnected, isTesting = false) {
@@ -540,7 +518,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast(message, type = "success") {
       clearTimeout(this.state.activeToastTimer);
       const container = this.elements.toastContainer;
-      container.innerHTML = ""; // Hapus toast lama
+      container.innerHTML = "";
       const toastElement = document.createElement("div");
       toastElement.className = `toast ${type}`;
       toastElement.textContent = message;
@@ -627,7 +605,6 @@ document.addEventListener("DOMContentLoaded", () => {
         this.config.systems.includes(activeSystemForModal)
           ? this.config.systems
           : [activeSystemForModal];
-
       Promise.all(systemsToUpdate.map(apiCall)).then(() => {
         this.showToast(
           systemsToUpdate.length > 1
@@ -635,9 +612,8 @@ document.addEventListener("DOMContentLoaded", () => {
             : `${activeSystemForModal.toUpperCase()} warna diperbarui`,
           "success"
         );
-        this.fetchInitialState(); // Refresh UI to show the new state
+        this.fetchInitialState();
       });
-
       this.elements.colorPickerModal.backdrop.style.display = "none";
     },
 
@@ -646,7 +622,6 @@ document.addEventListener("DOMContentLoaded", () => {
       this.elements.resetModal.input.value = "";
       this.elements.resetModal.confirmBtn.disabled = true;
     },
-
     handleResetConfirm() {
       this.api.post("/reset-to-default").then(() => {
         this.showToast(
@@ -657,16 +632,15 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     },
 
-    // --- FUNGSI BARU DAN DIMODIFIKASI UNTUK PRESET ---
     async populatePresetSlots() {
       try {
         const response = await this.api.get("/get-presets");
         const presets = await response.json();
-        this.state.presets = presets; // Simpan data preset
+        this.state.presets = presets;
         this.elements.presetSlot.innerHTML = presets
           .map((p) => `<option value="${p.slot}">${p.name}</option>`)
           .join("");
-        this.updatePresetPreview(); // Update pratinjau untuk slot pertama
+        this.updatePresetPreview();
       } catch (error) {
         this.showToast("Gagal memuat daftar preset", "error");
       }
@@ -712,7 +686,7 @@ document.addEventListener("DOMContentLoaded", () => {
             `Preset '${name}' berhasil disimpan ke Slot ${slot}`,
             "success"
           );
-          this.populatePresetSlots(); // Refresh daftar preset
+          this.populatePresetSlots();
         }
       });
     },
@@ -730,7 +704,7 @@ document.addEventListener("DOMContentLoaded", () => {
         this.api.post("/load-preset", { slot }).then((response) => {
           if (response.ok) {
             this.showToast(`Preset '${presetName}' berhasil dimuat`, "success");
-            this.fetchInitialState(); // Ambil state terbaru dari firmware dan perbarui UI
+            this.fetchInitialState();
           }
         });
       }
