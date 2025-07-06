@@ -1,13 +1,14 @@
 /*
  * ===================================================================
- * AERI LIGHT v19.7 - STYLESHEET (Z-INDEX FIX)
+ * AERI LIGHT v20.0 - STYLESHEET (STABILITY & UX UPDATE)
  * ===================================================================
  * Deskripsi Perubahan:
- * - FIX: Bug di mana menu dropdown terpotong atau muncul di belakang
- * elemen lain.
- * - Menambahkan `position: relative` dan `z-index` pada `.control-group`
- * untuk memastikan elemen di dalamnya (seperti dropdown) selalu
- * muncul di lapisan paling atas.
+ * - ADD: Menambahkan style untuk .saving-indicator, memberikan
+ * feedback visual saat PWA berkomunikasi dengan perangkat.
+ * - ADD: Menambahkan style untuk .panel-synced untuk memberi
+ * sorotan visual saat mode sinkronisasi aktif.
+ * - FIX: Mempertahankan perbaikan z-index untuk dropdown dari
+ * versi sebelumnya.
  * ===================================================================
  */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700&display=swap");
@@ -167,9 +168,18 @@ details.cyber-panel,
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
   transition: background-color 0.3s, border-color 0.3s;
 }
+
+/* Penanda panel yang sedang disinkronkan */
+.cyber-panel.panel-synced {
+  border-color: var(--success-color);
+  box-shadow: 0 0 15px var(--success-color),
+    inset 0 0 15px rgba(57, 255, 20, 0.1);
+}
+
 .cyber-panel .panel-body,
 details.cyber-panel .panel-body {
   padding: 25px;
+  position: relative; /* Diperlukan untuk positioning .saving-indicator */
 }
 details > summary {
   display: flex;
@@ -367,6 +377,7 @@ details[open] > summary .accordion-icon {
 }
 input[type="range"] {
   -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 4px;
   background: var(--input-bg);
@@ -538,6 +549,7 @@ input:checked + .slider:before {
 }
 .modal-input-group input[type="number"] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 .modal-color-picker .modal-actions {
   margin-top: 20px;
@@ -590,6 +602,9 @@ input:checked + .slider:before {
   left: 50%;
   transform: translateX(-50%);
   z-index: 5000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .toast {
   padding: 15px 25px;
@@ -666,12 +681,6 @@ input:checked + .slider:before {
   font-style: italic;
   font-weight: 600;
 }
-.control-set.synced-panel {
-  border-color: var(--success-color);
-  box-shadow: 0 0 15px var(--success-color),
-    inset 0 0 15px rgba(57, 255, 20, 0.1);
-  transition: all 0.4s ease-in-out;
-}
 .panel-info {
   position: absolute;
   top: 15px;
@@ -685,6 +694,25 @@ input:checked + .slider:before {
   border-radius: 4px;
   border: 1px solid var(--border-color);
 }
+
+/* Style untuk indikator "Menyimpan..." */
+.saving-indicator {
+  position: absolute;
+  top: 20px;
+  right: 80px; /* Disesuaikan agar tidak tumpang tindih */
+  background-color: var(--info-color);
+  color: var(--bg-color);
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-weight: 700;
+  font-size: 0.8em;
+  z-index: 10;
+  opacity: 0.9;
+  transition: opacity 0.3s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
 @media (max-width: 768px) {
   .desktop-nav {
     display: none;

@@ -81,6 +81,7 @@
       <div id="tabKontrol" class="tab-content active">
         <section class="cyber-panel">
           <div class="panel-body">
+            <div id="savingIndicator" class="saving-indicator" style="display: none;">Menyimpan...</div>
             <div class="sync-toggle-container">
               <label for="syncSwitch">SINKRONKAN (ALIS, SHROUD, DEMON)</label>
               <label class="switch"
@@ -117,9 +118,9 @@
               /><label for="controlTargetSein">SEIN</label>
             </div>
             <div id="alis-controls-container"></div>
-            <div id="shroud-controls-container"></div>
-            <div id="demon-controls-container"></div>
-            <div id="sein-controls-container"></div>
+            <div id="shroud-controls-container" style="display: none;"></div>
+            <div id="demon-controls-container" style="display: none;"></div>
+            <div id="sein-controls-container" style="display: none;"></div>
           </div>
         </section>
       </div>
@@ -157,51 +158,49 @@
             PENGATURAN JUMLAH LED<span class="accordion-icon">›</span>
           </summary>
           <div class="panel-body">
+            <small>Atur jumlah LED per sisi untuk setiap bagian lampu.</small>
             <div class="control-group">
-              <label class="control-label">TARGET JUMLAH LED</label>
-              <div class="radio-group">
-                <input
-                  type="radio"
-                  id="ledTargetAlis"
-                  name="ledTarget"
-                  value="alis"
-                  checked
-                /><label for="ledTargetAlis">ALIS</label
-                ><input
-                  type="radio"
-                  id="ledTargetShroud"
-                  name="ledTarget"
-                  value="shroud"
-                /><label for="ledTargetShroud">SHROUD</label
-                ><input
-                  type="radio"
-                  id="ledTargetDemon"
-                  name="ledTarget"
-                  value="demon"
-                /><label for="ledTargetDemon">DEMON</label
-                ><input
-                  type="radio"
-                  id="ledTargetSein"
-                  name="ledTarget"
-                  value="sein"
-                /><label for="ledTargetSein">SEIN</label>
-              </div>
-            </div>
-            <div class="control-group">
-              <label for="ledCount">Jumlah LED (Per Sisi)</label
+              <label for="ledCountAlis">Jumlah LED Alis</label
               ><input
                 type="number"
-                id="ledCount"
+                id="ledCountAlis"
                 min="0"
                 max="250"
                 class="cyber-input"
-                disabled
+              />
+            </div>
+             <div class="control-group">
+              <label for="ledCountShroud">Jumlah LED Shroud</label
+              ><input
+                type="number"
+                id="ledCountShroud"
+                min="0"
+                max="250"
+                class="cyber-input"
+              />
+            </div>
+             <div class="control-group">
+              <label for="ledCountDemon">Jumlah LED Demon</label
+              ><input
+                type="number"
+                id="ledCountDemon"
+                min="0"
+                max="250"
+                class="cyber-input"
+              />
+            </div>
+             <div class="control-group">
+              <label for="ledCountSein">Jumlah LED Sein</label
+              ><input
+                type="number"
+                id="ledCountSein"
+                min="0"
+                max="250"
+                class="cyber-input"
               />
             </div>
             <div class="modal-actions">
-              <button id="btnPreviewLedCount" class="btn btn-secondary">
-                Preview</button
-              ><button id="btnSaveLedCount" class="btn">Simpan</button>
+              <button id="btnSaveLedCounts" class="btn">Simpan Semua</button>
             </div>
           </div>
         </details>
@@ -243,7 +242,6 @@
       </div>
     </main>
 
-    <!-- PERBAIKAN: Memuat config.js terlebih dahulu, lalu app.js tanpa type="module" -->
     <script src="config.js"></script>
     <script src="app.js"></script>
     <script>
