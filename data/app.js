@@ -354,7 +354,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve(this.generateDummyState()),
+            json: () => Promise.resolve(App.generateDummyState()),
           });
         }
         try {

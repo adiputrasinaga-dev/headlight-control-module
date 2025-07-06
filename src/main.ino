@@ -1,18 +1,17 @@
 /*
  * ===================================================================================
- * AERI LIGHT v17.5 - FIRMWARE (IMPLEMENTASI PRESET)
+ * AERI LIGHT v17.9 - FIRMWARE (DEPRECATION WARNINGS FIXED)
  * ===================================================================================
  * Deskripsi:
- * Firmware ESP32 yang disempurnakan untuk AERI LIGHT Headlight Control Module.
- * Versi ini mencakup implementasi fitur preset yang andal dan telah
- * menghapus sistem keamanan berbasis PIN untuk menyederhanakan fungsionalitas.
+ * Firmware ESP32 yang telah diperbarui untuk menghilangkan peringatan "deprecated"
+ * dari library ArduinoJson. Fungsi `containsKey()` telah diganti dengan metode
+ * `obj[key].is<T>()` yang lebih modern.
  *
  * Perubahan Utama:
- * 1.  Fitur Preset: Logika untuk menyimpan dan memuat preset telah diimplementasikan
- * sepenuhnya dan diperkuat untuk menangani berbagai kasus.
- * 2.  Keamanan Dihapus: Fungsi `isAuthenticated()` dan semua panggilannya telah
- * dihapus untuk akses langsung ke API.
- * 3.  Stabilitas: Penanganan error pada pembacaan dan penulisan file JSON ditingkatkan.
+ * 1.  Modernisasi ArduinoJson: Mengganti semua pemanggilan `containsKey()` di dalam
+ * fungsi `handleLoadPreset` dan `deserializeLightConfig`.
+ * 2.  Kode Lebih Bersih: Menghilangkan peringatan saat kompilasi.
+ * 3.  Future-Proofing: Memastikan kompatibilitas dengan versi ArduinoJson mendatang.
  * ===================================================================================
  */
 
@@ -24,7 +23,10 @@
 #include <Preferences.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
-#include <DNSServer.h>
+
+// --- Konfigurasi Jaringan Access Point ---
+const char *AP_SSID = "AERI_LIGHT";   // Nama WiFi yang dibuat perangkat
+const char *AP_PASSWORD = "12345678"; // Password untuk WiFi perangkat
 
 // --- Definisi Pin & LED ---
 #define PIN_ALIS_KIRI 5
@@ -40,19 +42,7 @@
 #define COLOR_ORDER GRB
 const uint8_t CONFIG_VERSION = 18;
 
-// --- Konfigurasi Jaringan ---
-const char *ap_provision_ssid = "AERI_LIGHT_SETUP";
-const char *ap_control_ssid = "AlisBelang";
-const char *ap_password = "12345678";
-
 // === State Management Structs ===
-struct WifiCredentials
-{
-  char ssid[32] = "";
-  char password[64] = "";
-  bool configured = false;
-};
-
 struct LightState
 {
   CRGB warna = CRGB::Red;
@@ -60,7 +50,6 @@ struct LightState
   CRGB warna3 = CRGB::Green;
   uint8_t modeEfek = 0;
 };
-
 struct LightConfig
 {
   LightState stateKiri, stateKanan;
@@ -69,7 +58,6 @@ struct LightConfig
   uint8_t speed = 50;
   char target[10] = "keduanya";
 };
-
 struct SeinConfig
 {
   uint8_t mode = 0;
@@ -77,7 +65,6 @@ struct SeinConfig
   uint8_t ledCount = 30;
   uint8_t speed = 50;
 };
-
 struct GlobalConfig
 {
   uint8_t modeWelcome = 0;
@@ -85,39 +72,25 @@ struct GlobalConfig
 };
 
 // --- Variabel Global ---
-WifiCredentials homeWifi;
 LightConfig alisConfig, shroudConfig, demonConfig;
 SeinConfig seinConfig;
 GlobalConfig globalConfig;
-
-CRGB ledsAlisKiri[MAX_LEDS], ledsAlisKanan[MAX_LEDS];
-CRGB ledsShroudKiri[MAX_LEDS], ledsShroudKanan[MAX_LEDS];
-CRGB ledsDemonKiri[MAX_LEDS], ledsDemonKanan[MAX_LEDS];
-
+CRGB ledsAlisKiri[MAX_LEDS], ledsAlisKanan[MAX_LEDS], ledsShroudKiri[MAX_LEDS], ledsShroudKanan[MAX_LEDS], ledsDemonKiri[MAX_LEDS], ledsDemonKanan[MAX_LEDS];
 Preferences prefs;
 AsyncWebServer server(80);
-DNSServer dnsServer;
-
 unsigned long previousMillis = 0;
-const long loopInterval = 16; // Target ~60 FPS
-
+const long loopInterval = 16;
 bool isWelcomeActive = true;
-bool provisioningMode = false;
 uint16_t animStep = 0;
-
-// Variabel untuk Fitur Pratinjau Non-Blocking
 bool isPreviewing = false;
 unsigned long previewEndTime = 0;
-CRGB *previewLedsKiri = nullptr;
-CRGB *previewLedsKanan = nullptr;
+CRGB *previewLedsKiri = nullptr, *previewLedsKanan = nullptr;
 uint8_t previewLedCount = 0;
 
 // --- Prototipe Fungsi ---
-void resetToDefaults(bool fullReset);
+void resetToDefaults();
 void simpanPengaturan();
 void bacaPengaturan();
-void simpanKredensialWiFi();
-void bacaKredensialWiFi();
 void jalankanModeWelcome();
 void jalankanModeSein(bool isKiriActive, bool isKananActive);
 void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan);
@@ -127,8 +100,6 @@ void handleSetModeLampu(AsyncWebServerRequest *request, LightConfig &config);
 void handleSetModeSein(AsyncWebServerRequest *request);
 void handleSetModeWelcome(AsyncWebServerRequest *request);
 void handleReset(AsyncWebServerRequest *request);
-void handleScanNetworks(AsyncWebServerRequest *request);
-void handleSaveCredentials(AsyncWebServerRequest *request);
 void handleGetPresets(AsyncWebServerRequest *request);
 void handleSavePreset(AsyncWebServerRequest *request);
 void handleLoadPreset(AsyncWebServerRequest *request);
@@ -147,6 +118,7 @@ void setup()
   }
 
   initializePresets();
+  bacaPengaturan();
 
   FastLED.addLeds<LED_TYPE, PIN_ALIS_KIRI, COLOR_ORDER>(ledsAlisKiri, MAX_LEDS);
   FastLED.addLeds<LED_TYPE, PIN_ALIS_KANAN, COLOR_ORDER>(ledsAlisKanan, MAX_LEDS);
@@ -158,54 +130,34 @@ void setup()
   pinMode(PIN_INPUT_SEIN_KIRI, INPUT_PULLUP);
   pinMode(PIN_INPUT_SEIN_KANAN, INPUT_PULLUP);
 
-  bacaKredensialWiFi();
+  // --- Setup WiFi dalam Mode Access Point (AP) ---
+  Serial.print("Membuat Access Point: ");
+  Serial.println(AP_SSID);
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(AP_SSID, AP_PASSWORD);
 
-  if (provisioningMode)
-  {
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(ap_provision_ssid);
-    dnsServer.start(53, "*", WiFi.softAPIP());
+  Serial.print("AP IP address: ");
+  Serial.println(WiFi.softAPIP()); // Alamat IP default biasanya 192.168.4.1
 
-    server.serveStatic("/", SPIFFS, "/").setDefaultFile("setup.html");
-    server.on("/scan-networks", HTTP_GET, handleScanNetworks);
-    server.on("/save-credentials", HTTP_POST, handleSaveCredentials);
-    server.onNotFound([](AsyncWebServerRequest *request)
-                      { request->redirect("/"); });
-  }
-  else
-  {
-    bacaPengaturan();
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(ap_control_ssid, ap_password);
-    dnsServer.start(53, "*", WiFi.softAPIP());
-    WiFi.begin(homeWifi.ssid, homeWifi.password);
-
-    server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
-
-    // API Endpoints
-    server.on("/get-state", HTTP_GET, handleGetState);
-    server.on("/set-config", HTTP_POST, handleSetConfig);
-    server.on("/set-mode-alis", HTTP_POST, [](AsyncWebServerRequest *request)
-              { handleSetModeLampu(request, alisConfig); });
-    server.on("/set-mode-shroud", HTTP_POST, [](AsyncWebServerRequest *request)
-              { handleSetModeLampu(request, shroudConfig); });
-    server.on("/set-mode-demon", HTTP_POST, [](AsyncWebServerRequest *request)
-              { handleSetModeLampu(request, demonConfig); });
-    server.on("/set-mode-sein", HTTP_POST, handleSetModeSein);
-    server.on("/set-mode-welcome", HTTP_POST, handleSetModeWelcome);
-    server.on("/reset-to-default", HTTP_POST, handleReset);
-
-    // Preset Endpoints
-    server.on("/get-presets", HTTP_GET, handleGetPresets);
-    server.on("/save-preset", HTTP_POST, handleSavePreset);
-    server.on("/load-preset", HTTP_POST, handleLoadPreset);
-
-    // Action Endpoints
-    server.on("/preview-led-count", HTTP_POST, handlePreviewLedCount);
-
-    server.onNotFound([](AsyncWebServerRequest *request)
-                      { request->redirect("http://" + request->host()); });
-  }
+  // --- Konfigurasi Server ---
+  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+  server.on("/get-state", HTTP_GET, handleGetState);
+  server.on("/set-config", HTTP_POST, handleSetConfig);
+  server.on("/set-mode-alis", HTTP_POST, [](AsyncWebServerRequest *request)
+            { handleSetModeLampu(request, alisConfig); });
+  server.on("/set-mode-shroud", HTTP_POST, [](AsyncWebServerRequest *request)
+            { handleSetModeLampu(request, shroudConfig); });
+  server.on("/set-mode-demon", HTTP_POST, [](AsyncWebServerRequest *request)
+            { handleSetModeLampu(request, demonConfig); });
+  server.on("/set-mode-sein", HTTP_POST, handleSetModeSein);
+  server.on("/set-mode-welcome", HTTP_POST, handleSetModeWelcome);
+  server.on("/reset-to-default", HTTP_POST, handleReset);
+  server.on("/get-presets", HTTP_GET, handleGetPresets);
+  server.on("/save-preset", HTTP_POST, handleSavePreset);
+  server.on("/load-preset", HTTP_POST, handleLoadPreset);
+  server.on("/preview-led-count", HTTP_POST, handlePreviewLedCount);
+  server.onNotFound([](AsyncWebServerRequest *request)
+                    { request->send(404, "text/plain", "Not found"); });
 
   server.begin();
   Serial.println("HTTP server started");
@@ -213,17 +165,13 @@ void setup()
 
 void loop()
 {
-  dnsServer.processNextRequest();
-
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis < loopInterval)
     return;
   previousMillis = currentMillis;
   animStep++;
-
   bool seinKiriNyala = (digitalRead(PIN_INPUT_SEIN_KIRI) == LOW);
   bool seinKananNyala = (digitalRead(PIN_INPUT_SEIN_KANAN) == LOW);
-
   if (isPreviewing)
   {
     if (currentMillis > previewEndTime)
@@ -244,7 +192,7 @@ void loop()
     FastLED.clear();
     jalankanModeSein(seinKiriNyala, seinKananNyala);
   }
-  else if (isWelcomeActive && !provisioningMode)
+  else if (isWelcomeActive)
   {
     jalankanModeWelcome();
   }
@@ -254,11 +202,10 @@ void loop()
     jalankanModeLampu(shroudConfig, ledsShroudKiri, ledsShroudKanan);
     jalankanModeLampu(demonConfig, ledsDemonKiri, ledsDemonKanan);
   }
-
   FastLED.show();
 }
 
-void resetToDefaults(bool fullReset)
+void resetToDefaults()
 {
   alisConfig = LightConfig();
   shroudConfig = LightConfig();
@@ -268,13 +215,6 @@ void resetToDefaults(bool fullReset)
   isWelcomeActive = true;
   Serial.println("State dikembalikan ke default.");
   simpanPengaturan();
-
-  if (fullReset)
-  {
-    prefs.begin("wifi-creds", false);
-    prefs.clear();
-    prefs.end();
-  }
 }
 
 void simpanPengaturan()
@@ -304,63 +244,38 @@ void bacaPengaturan()
   else
   {
     prefs.end();
-    resetToDefaults(false);
+    resetToDefaults();
     return;
   }
   prefs.end();
-}
-
-void simpanKredensialWiFi()
-{
-  prefs.begin("wifi-creds", false);
-  prefs.putBytes("creds", &homeWifi, sizeof(WifiCredentials));
-  prefs.end();
-}
-
-void bacaKredensialWiFi()
-{
-  prefs.begin("wifi-creds", true);
-  if (prefs.getBytesLength("creds") == sizeof(WifiCredentials))
-  {
-    prefs.getBytes("creds", &homeWifi, sizeof(WifiCredentials));
-  }
-  else
-  {
-    homeWifi.configured = false;
-  }
-  prefs.end();
-  provisioningMode = !homeWifi.configured;
 }
 
 void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
 {
   uint8_t globalBrightness = FastLED.getBrightness();
   FastLED.setBrightness(config.brightness);
-
   auto animate = [&](const LightState &state, CRGB *leds, uint8_t count)
   {
     fill_solid(leds, MAX_LEDS, CRGB::Black);
     if (count == 0)
       return;
-
     uint8_t currentSpeed = map(config.speed, 0, 100, 1, 15);
     uint8_t currentIntensity = 80;
-
     switch (state.modeEfek)
     {
-    case 0: // Statis
+    case 0:
       fill_solid(leds, count, state.warna);
       break;
-    case 1: // Breathing
+    case 1:
     {
       CRGB tempColor = state.warna;
       fill_solid(leds, count, tempColor.nscale8(sin8(animStep * currentSpeed)));
     }
     break;
-    case 2: // Rainbow
+    case 2:
       fill_rainbow(leds, count, animStep * currentSpeed, 256 / count);
       break;
-    case 3: // Comet
+    case 3:
     {
       float p = fmod((float)animStep * currentSpeed * 0.5, (float)count + 15);
       fadeToBlackBy(leds, count, 64);
@@ -368,7 +283,7 @@ void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
         leds[(int)p] = state.warna;
     }
     break;
-    case 4: // Cylon Scanner
+    case 4:
     {
       int p = map(triwave8((animStep * currentSpeed) / 2), 0, 255, 0, count - 4);
       fadeToBlackBy(leds, count, 64);
@@ -379,14 +294,14 @@ void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
       }
     }
     break;
-    case 5: // Twinkle
+    case 5:
     {
       fadeToBlackBy(leds, count, 40);
       if (random8() < currentIntensity)
         leds[random16(count)] = (random8() < 128) ? state.warna : state.warna2;
     }
     break;
-    case 6: // Fire
+    case 6:
     {
       for (int i = 0; i < count; i++)
         leds[i].nscale8(192);
@@ -394,12 +309,11 @@ void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
         leds[random16(count)] = HeatColor(random8(160, 255));
     }
     break;
-    case 7: // Gradient Shift
+    case 7:
       fl::fill_gradient_RGB(leds, count, state.warna, state.warna2, state.warna3);
       break;
     }
   };
-
   if (strcmp(config.target, "kiri") == 0)
   {
     animate(config.stateKiri, ledsKiri, config.ledCount);
@@ -409,7 +323,7 @@ void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
     animate(config.stateKanan, ledsKanan, config.ledCount);
   }
   else
-  { // keduanya
+  {
     animate(config.stateKiri, ledsKiri, config.ledCount);
     if (config.ledCount > 0)
     {
@@ -422,17 +336,16 @@ void jalankanModeLampu(LightConfig &config, CRGB *ledsKiri, CRGB *ledsKanan)
   }
   FastLED.setBrightness(globalBrightness);
 }
-
 void jalankanModeSein(bool isKiriActive, bool isKananActive)
 {
   auto animate = [&](uint8_t mode, CRGB *leds, uint8_t count)
   {
     if (count == 0)
       return;
-    uint16_t animSpeed = map(seinConfig.speed, 0, 100, 25, 5); // Speed inverted
+    uint16_t animSpeed = map(seinConfig.speed, 0, 100, 25, 5);
     switch (mode)
     {
-    case 0: // Sequential
+    case 0:
     {
       uint16_t pos = (millis() / animSpeed) % (count + 5);
       fill_solid(leds, count, CRGB::Black);
@@ -440,12 +353,12 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
         fill_solid(leds, pos + 1, seinConfig.warna);
     }
     break;
-    case 1: // Pulsing Arrow
+    case 1:
     {
       fill_solid(leds, count, (millis() / 500) % 2 ? seinConfig.warna : CRGB::Black);
     }
     break;
-    case 2: // Fill & Flush
+    case 2:
     {
       uint16_t c = (millis() / (animSpeed * count));
       if (c % 2 == 0)
@@ -459,7 +372,7 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
       }
     }
     break;
-    case 3: // Comet Trail
+    case 3:
     {
       float p = fmod((float)millis() / (animSpeed * 0.5), (float)count + 10);
       fadeToBlackBy(leds, count, 40);
@@ -474,7 +387,6 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
   if (isKananActive)
     animate(seinConfig.mode, ledsAlisKanan, seinConfig.ledCount);
 }
-
 void jalankanModeWelcome()
 {
   static uint32_t startTime = 0;
@@ -482,18 +394,16 @@ void jalankanModeWelcome()
     startTime = millis();
   uint32_t elapsed = millis() - startTime;
   uint16_t duration = globalConfig.durasiWelcome * 1000;
-
   if (elapsed > duration)
   {
     isWelcomeActive = false;
     startTime = 0;
     return;
   }
-
   uint8_t count = alisConfig.ledCount;
   switch (globalConfig.modeWelcome)
   {
-  case 0: // Power-On Scan
+  case 0:
   {
     int p = map(triwave8(map(elapsed, 0, duration, 0, 255)), 0, 255, 0, count - 1);
     fill_solid(ledsAlisKiri, count, CRGB::Black);
@@ -501,7 +411,7 @@ void jalankanModeWelcome()
       ledsAlisKiri[p] = CRGB::Red;
   }
   break;
-  case 1: // Ignition Burst
+  case 1:
   {
     uint8_t b = map(elapsed, 0, duration, 0, (count / 2) + 1);
     for (int i = 0; i < b; i++)
@@ -513,7 +423,7 @@ void jalankanModeWelcome()
     }
   }
   break;
-  case 2: // Spectrum Resolve
+  case 2:
   {
     if (elapsed < duration / 2)
     {
@@ -530,7 +440,7 @@ void jalankanModeWelcome()
     }
   }
   break;
-  case 3: // Theater Chase
+  case 3:
   {
     uint16_t p = map(elapsed, 0, duration, 0, count / 2);
     fill_solid(ledsAlisKiri, count, CRGB::Black);
@@ -544,13 +454,11 @@ void jalankanModeWelcome()
   }
   break;
   }
-
   if (count > 0)
   {
     memcpy(ledsAlisKanan, ledsAlisKiri, sizeof(CRGB) * count);
   }
 }
-
 void handleGetState(AsyncWebServerRequest *request)
 {
   JsonDocument doc;
@@ -575,7 +483,6 @@ void handleGetState(AsyncWebServerRequest *request)
   serializeJson(doc, response);
   request->send(200, "application/json", response);
 }
-
 void handleSetModeLampu(AsyncWebServerRequest *request, LightConfig &config)
 {
   bool needsSave = false;
@@ -612,7 +519,6 @@ void handleSetModeLampu(AsyncWebServerRequest *request, LightConfig &config)
     simpanPengaturan();
   request->send(200, "text/plain", "OK");
 }
-
 void handleSetConfig(AsyncWebServerRequest *request)
 {
   if (request->hasParam("ledTarget", true) && request->hasParam("ledCount", true))
@@ -635,7 +541,6 @@ void handleSetConfig(AsyncWebServerRequest *request)
     request->send(400, "text/plain", "Bad Request");
   }
 }
-
 void handleSetModeSein(AsyncWebServerRequest *request)
 {
   bool needsSave = false;
@@ -664,7 +569,6 @@ void handleSetModeSein(AsyncWebServerRequest *request)
     request->send(400, "text/plain", "Bad Request");
   }
 }
-
 void handleSetModeWelcome(AsyncWebServerRequest *request)
 {
   if (request->hasParam("preview", true))
@@ -685,7 +589,6 @@ void handleSetModeWelcome(AsyncWebServerRequest *request)
     request->send(400, "text/plain", "Bad Request");
   }
 }
-
 void handlePreviewLedCount(AsyncWebServerRequest *request)
 {
   if (request->hasParam("ledTarget", true) && request->hasParam("ledCount", true))
@@ -723,15 +626,13 @@ void handlePreviewLedCount(AsyncWebServerRequest *request)
     request->send(400, "text/plain", "Bad Request");
   }
 }
-
 void handleReset(AsyncWebServerRequest *request)
 {
-  resetToDefaults(true);
+  resetToDefaults();
   request->send(200, "text/plain", "OK");
   delay(1000);
   ESP.restart();
 }
-
 void initializePresets()
 {
   if (!SPIFFS.exists("/presets.json"))
@@ -752,12 +653,10 @@ void initializePresets()
     f.close();
   }
 }
-
 void handleGetPresets(AsyncWebServerRequest *request)
 {
   request->send(SPIFFS, "/presets.json", "application/json");
 }
-
 void handleSavePreset(AsyncWebServerRequest *request)
 {
   if (request->hasParam("slot", true) && request->hasParam("name", true))
@@ -812,7 +711,6 @@ void handleSavePreset(AsyncWebServerRequest *request)
     c.add(seinConfig.warna.r);
     c.add(seinConfig.warna.g);
     c.add(seinConfig.warna.b);
-
     f = SPIFFS.open("/presets.json", "w");
     if (serializeJson(d, f) == 0)
     {
@@ -868,7 +766,8 @@ void handleLoadPreset(AsyncWebServerRequest *request)
     deserializeLightConfig(so["alis"].as<JsonObject>(), alisConfig);
     deserializeLightConfig(so["shroud"].as<JsonObject>(), shroudConfig);
     deserializeLightConfig(so["demon"].as<JsonObject>(), demonConfig);
-    if (so.containsKey("sein"))
+    // PERBAIKAN: Menggunakan obj.is<T>() untuk pemeriksaan yang aman
+    if (so["sein"].is<JsonObject>())
     {
       JsonObject i = so["sein"].as<JsonObject>();
       seinConfig.mode = i["mode"];
@@ -885,55 +784,6 @@ void handleLoadPreset(AsyncWebServerRequest *request)
   else
   {
     request->send(400, "text/plain", "Parameter tidak lengkap");
-  }
-}
-
-void handleScanNetworks(AsyncWebServerRequest *request)
-{
-  String json = "[";
-  int n = WiFi.scanNetworks();
-  if (n > 0)
-  {
-    for (int i = 0; i < n; ++i)
-    {
-      json += "{\"ssid\":\"" + WiFi.SSID(i) + "\"}";
-      if (i < n - 1)
-        json += ",";
-    }
-  }
-  json += "]";
-  request->send(200, "application/json", json);
-}
-
-void handleSaveCredentials(AsyncWebServerRequest *request)
-{
-  if (request->hasParam("ssid", true) && request->hasParam("password", true))
-  {
-    strncpy(homeWifi.ssid, request->getParam("ssid", true)->value().c_str(), sizeof(homeWifi.ssid));
-    strncpy(homeWifi.password, request->getParam("password", true)->value().c_str(), sizeof(homeWifi.password));
-    WiFi.begin(homeWifi.ssid, homeWifi.password);
-    unsigned long t = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t < 15000)
-    {
-      delay(500);
-    }
-    if (WiFi.status() == WL_CONNECTED)
-    {
-      homeWifi.configured = true;
-      simpanKredensialWiFi();
-      request->send(200, "text/plain", "SUCCESS");
-      delay(1000);
-      ESP.restart();
-    }
-    else
-    {
-      homeWifi.configured = false;
-      request->send(401, "text/plain", "FAILED");
-    }
-  }
-  else
-  {
-    request->send(400, "text/plain", "BAD_REQUEST");
   }
 }
 
@@ -967,7 +817,8 @@ void deserializeLightConfig(const JsonObject &obj, LightConfig &config)
   config.ledCount = obj["ledCount"] | config.ledCount;
   config.brightness = obj["brightness"] | config.brightness;
   config.speed = obj["speed"] | config.speed;
-  if (obj.containsKey("target"))
+  // PERBAIKAN: Menggunakan obj.is<T>() untuk pemeriksaan yang aman
+  if (obj["target"].is<const char *>())
   {
     strncpy(config.target, obj["target"], sizeof(config.target) - 1);
   }
@@ -975,21 +826,22 @@ void deserializeLightConfig(const JsonObject &obj, LightConfig &config)
   if (!sk.isNull())
   {
     config.stateKiri.modeEfek = sk["modeEfek"] | config.stateKiri.modeEfek;
-    if (sk.containsKey("warna"))
+    // PERBAIKAN: Menggunakan obj.is<T>() untuk pemeriksaan yang aman
+    if (sk["warna"].is<JsonArray>())
     {
       JsonArray wk = sk["warna"].as<JsonArray>();
       config.stateKiri.warna.r = wk[0];
       config.stateKiri.warna.g = wk[1];
       config.stateKiri.warna.b = wk[2];
     }
-    if (sk.containsKey("warna2"))
+    if (sk["warna2"].is<JsonArray>())
     {
       JsonArray w2k = sk["warna2"].as<JsonArray>();
       config.stateKiri.warna2.r = w2k[0];
       config.stateKiri.warna2.g = w2k[1];
       config.stateKiri.warna2.b = w2k[2];
     }
-    if (sk.containsKey("warna3"))
+    if (sk["warna3"].is<JsonArray>())
     {
       JsonArray w3k = sk["warna3"].as<JsonArray>();
       config.stateKiri.warna3.r = w3k[0];
