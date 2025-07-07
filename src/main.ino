@@ -70,11 +70,12 @@ struct SeinConfig
   CRGB warna = CRGB::Orange;
   uint8_t kecepatan = 50;
 };
-struct LedCountConfig {
-    uint8_t alis = 30;
-    uint8_t shroud = 30;
-    uint8_t demon = 1;
-    uint8_t sein = 30;
+struct LedCountConfig
+{
+  uint8_t alis = 30;
+  uint8_t shroud = 30;
+  uint8_t demon = 1;
+  uint8_t sein = 30;
 };
 struct WelcomeConfig
 {
@@ -144,7 +145,8 @@ void initializePresets();
 void setup()
 {
   Serial.begin(115200);
-  if (!LittleFS.begin(true)) {
+  if (!LittleFS.begin(true))
+  {
     Serial.println("LittleFS Mount Failed");
     return;
   }
@@ -171,15 +173,23 @@ void setup()
   server.on("/get-state", HTTP_GET, handleGetState);
 
   // JSON Body Handlers
-  AsyncCallbackJsonWebHandler *setAlisHandler = new AsyncCallbackJsonWebHandler("/set-mode-alis", [](AsyncWebServerRequest *request, JsonVariant &json) { handleSetModeLampu(request, json, alisConfig); });
-  AsyncCallbackJsonWebHandler *setShroudHandler = new AsyncCallbackJsonWebHandler("/set-mode-shroud", [](AsyncWebServerRequest *request, JsonVariant &json) { handleSetModeLampu(request, json, shroudConfig); });
-  AsyncCallbackJsonWebHandler *setDemonHandler = new AsyncCallbackJsonWebHandler("/set-mode-demon", [](AsyncWebServerRequest *request, JsonVariant &json) { handleSetModeLampu(request, json, demonConfig); });
-  AsyncCallbackJsonWebHandler *setSeinHandler = new AsyncCallbackJsonWebHandler("/set-mode-sein", [](AsyncWebServerRequest *request, JsonVariant &json) { handleSetModeSein(request, json); });
-  AsyncCallbackJsonWebHandler *setLedCountsHandler = new AsyncCallbackJsonWebHandler("/set-led-counts", [](AsyncWebServerRequest *request, JsonVariant &json) { handleSetLedCounts(request, json); });
-  AsyncCallbackJsonWebHandler *setWelcomeHandler = new AsyncCallbackJsonWebHandler("/set-welcome", [](AsyncWebServerRequest *request, JsonVariant &json) { handleSetWelcome(request, json); });
-  AsyncCallbackJsonWebHandler *savePresetHandler = new AsyncCallbackJsonWebHandler("/save-preset", [](AsyncWebServerRequest *request, JsonVariant &json) { handleSavePreset(request, json); });
-  AsyncCallbackJsonWebHandler *loadPresetHandler = new AsyncCallbackJsonWebHandler("/load-preset", [](AsyncWebServerRequest *request, JsonVariant &json) { handleLoadPreset(request, json); });
-  
+  AsyncCallbackJsonWebHandler *setAlisHandler = new AsyncCallbackJsonWebHandler("/set-mode-alis", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                { handleSetModeLampu(request, json, alisConfig); });
+  AsyncCallbackJsonWebHandler *setShroudHandler = new AsyncCallbackJsonWebHandler("/set-mode-shroud", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                  { handleSetModeLampu(request, json, shroudConfig); });
+  AsyncCallbackJsonWebHandler *setDemonHandler = new AsyncCallbackJsonWebHandler("/set-mode-demon", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                 { handleSetModeLampu(request, json, demonConfig); });
+  AsyncCallbackJsonWebHandler *setSeinHandler = new AsyncCallbackJsonWebHandler("/set-mode-sein", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                { handleSetModeSein(request, json); });
+  AsyncCallbackJsonWebHandler *setLedCountsHandler = new AsyncCallbackJsonWebHandler("/set-led-counts", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                     { handleSetLedCounts(request, json); });
+  AsyncCallbackJsonWebHandler *setWelcomeHandler = new AsyncCallbackJsonWebHandler("/set-welcome", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                   { handleSetWelcome(request, json); });
+  AsyncCallbackJsonWebHandler *savePresetHandler = new AsyncCallbackJsonWebHandler("/save-preset", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                   { handleSavePreset(request, json); });
+  AsyncCallbackJsonWebHandler *loadPresetHandler = new AsyncCallbackJsonWebHandler("/load-preset", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                   { handleLoadPreset(request, json); });
+
   server.addHandler(setAlisHandler);
   server.addHandler(setShroudHandler);
   server.addHandler(setDemonHandler);
@@ -188,13 +198,14 @@ void setup()
   server.addHandler(setWelcomeHandler);
   server.addHandler(savePresetHandler);
   server.addHandler(loadPresetHandler);
-  
+
   // Normal Handlers
   server.on("/preview-welcome", HTTP_POST, handlePreviewWelcome);
   server.on("/get-preset-name", HTTP_GET, handleGetPresetName);
   server.on("/reset-factory", HTTP_POST, handleResetFactory);
-  
-  server.onNotFound([](AsyncWebServerRequest *request) { request->send(404, "text/plain", "Not found"); });
+
+  server.onNotFound([](AsyncWebServerRequest *request)
+                    { request->send(404, "text/plain", "Not found"); });
 
   server.begin();
   Serial.println("HTTP server started");
@@ -203,38 +214,46 @@ void setup()
 void loop()
 {
   unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis < loopInterval) return;
+  if (currentMillis - previousMillis < loopInterval)
+    return;
   previousMillis = currentMillis;
   animStep++;
-  
+
   bool seinKiriNyala = (digitalRead(PIN_INPUT_SEIN_KIRI) == LOW);
   bool seinKananNyala = (digitalRead(PIN_INPUT_SEIN_KANAN) == LOW);
 
-  if (seinKiriNyala || seinKananNyala) {
+  if (seinKiriNyala || seinKananNyala)
+  {
     jalankanModeSein(seinKiriNyala, seinKananNyala);
-  } else if (isWelcomeActive) {
+  }
+  else if (isWelcomeActive)
+  {
     jalankanModeWelcome();
-  } else {
+  }
+  else
+  {
     jalankanModeLampu(alisConfig, ledsAlisKiri, ledCounts.alis);
     jalankanModeLampu(shroudConfig, ledsShroudKiri, ledCounts.shroud);
     jalankanModeLampu(demonConfig, ledsDemonKiri, ledCounts.demon);
   }
-  
+
   // Salin state dari Kiri ke Kanan untuk semua
   memcpy(ledsAlisKanan, ledsAlisKiri, sizeof(CRGB) * ledCounts.alis);
   memcpy(ledsShroudKanan, ledsShroudKiri, sizeof(CRGB) * ledCounts.shroud);
   memcpy(ledsDemonKanan, ledsDemonKiri, sizeof(CRGB) * ledCounts.demon);
-  
+
   FastLED.show();
 }
 
-void jalankanModeLampu(LightConfig &config, CRGB *leds, uint8_t ledCount) {
+void jalankanModeLampu(LightConfig &config, CRGB *leds, uint8_t ledCount)
+{
   fill_solid(leds, MAX_LEDS, CRGB::Black);
-  if (ledCount == 0 || config.mode >= numEffects) return;
+  if (ledCount == 0 || config.mode >= numEffects)
+    return;
 
   uint8_t originalBrightness = FastLED.getBrightness();
   FastLED.setBrightness(config.stateKiri.kecerahan);
-  
+
   uint8_t mapped_speed = map(config.kecepatan, 0, 100, 1, 15);
   EffectParams params = {leds, (uint16_t)ledCount, animStep, mapped_speed, config.stateKiri.warna[0], config.stateKiri.warna[1], config.stateKiri.warna[2]};
   effectRegistry[config.mode](params);
@@ -242,24 +261,30 @@ void jalankanModeLampu(LightConfig &config, CRGB *leds, uint8_t ledCount) {
   FastLED.setBrightness(originalBrightness);
 }
 
-void jalankanModeSein(bool isKiriActive, bool isKananActive) {
-    FastLED.clear();
-    if (isKiriActive && seinConfig.mode < numSeinEffects) {
-        SeinEffectParams params = {ledsAlisKiri, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna};
-        seinEffectRegistry[seinConfig.mode](params);
-    }
-    if (isKananActive && seinConfig.mode < numSeinEffects) {
-        SeinEffectParams params = {ledsAlisKanan, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna};
-        seinEffectRegistry[seinConfig.mode](params);
-    }
+void jalankanModeSein(bool isKiriActive, bool isKananActive)
+{
+  FastLED.clear();
+  if (isKiriActive && seinConfig.mode < numSeinEffects)
+  {
+    SeinEffectParams params = {ledsAlisKiri, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna};
+    seinEffectRegistry[seinConfig.mode](params);
+  }
+  if (isKananActive && seinConfig.mode < numSeinEffects)
+  {
+    SeinEffectParams params = {ledsAlisKanan, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna};
+    seinEffectRegistry[seinConfig.mode](params);
+  }
 }
 
-void jalankanModeWelcome() {
-  if (welcomeStartTime == 0) welcomeStartTime = millis();
+void jalankanModeWelcome()
+{
+  if (welcomeStartTime == 0)
+    welcomeStartTime = millis();
   uint32_t elapsed = millis() - welcomeStartTime;
   uint32_t duration = welcomeConfig.durasi * 1000;
 
-  if (elapsed > duration) {
+  if (elapsed > duration)
+  {
     isWelcomeActive = false;
     welcomeStartTime = 0;
     return;
@@ -267,7 +292,8 @@ void jalankanModeWelcome() {
 
   fill_solid(ledsAlisKiri, ledCounts.alis, CRGB::Black);
 
-  if (welcomeConfig.mode < numWelcomeEffects) {
+  if (welcomeConfig.mode < numWelcomeEffects)
+  {
     WelcomeEffectParams params = {ledsAlisKiri, (uint16_t)ledCounts.alis, elapsed, duration, alisConfig.stateKiri.warna[0], alisConfig.stateKiri.warna[1], alisConfig.stateKiri.warna[2]};
     welcomeEffectRegistry[welcomeConfig.mode](params);
   }
@@ -278,188 +304,227 @@ void jalankanModeWelcome() {
 
 void handleGetState(AsyncWebServerRequest *request)
 {
-    JsonDocument doc;
-    JsonObject state = doc.to<JsonObject>();
+  JsonDocument doc;
+  JsonObject state = doc.to<JsonObject>();
 
-    // Alis
-    JsonObject alis = state["alis"].to<JsonObject>();
-    alis["mode"] = alisConfig.mode;
-    alis["kecepatan"] = alisConfig.kecepatan;
-    JsonObject alisStateKiri = alis["stateKiri"].to<JsonObject>();
-    alisStateKiri["kecerahan"] = alisConfig.stateKiri.kecerahan;
-    JsonArray alisWarna = alisStateKiri["warna"].to<JsonArray>();
-    for(int i=0; i<3; i++) {
-        JsonArray c = alisWarna.add<JsonArray>();
-        c.add(alisConfig.stateKiri.warna[i].r); c.add(alisConfig.stateKiri.warna[i].g); c.add(alisConfig.stateKiri.warna[i].b);
-    }
+  // Alis
+  JsonObject alis = state["alis"].to<JsonObject>();
+  alis["mode"] = alisConfig.mode;
+  alis["kecepatan"] = alisConfig.kecepatan;
+  JsonObject alisStateKiri = alis["stateKiri"].to<JsonObject>();
+  alisStateKiri["kecerahan"] = alisConfig.stateKiri.kecerahan;
+  JsonArray alisWarna = alisStateKiri["warna"].to<JsonArray>();
+  for (int i = 0; i < 3; i++)
+  {
+    JsonArray c = alisWarna.add<JsonArray>();
+    c.add(alisConfig.stateKiri.warna[i].r);
+    c.add(alisConfig.stateKiri.warna[i].g);
+    c.add(alisConfig.stateKiri.warna[i].b);
+  }
 
-    // Shroud
-    JsonObject shroud = state["shroud"].to<JsonObject>();
-    shroud["mode"] = shroudConfig.mode;
-    shroud["kecepatan"] = shroudConfig.kecepatan;
-    JsonObject shroudStateKiri = shroud["stateKiri"].to<JsonObject>();
-    shroudStateKiri["kecerahan"] = shroudConfig.stateKiri.kecerahan;
-    JsonArray shroudWarna = shroudStateKiri["warna"].to<JsonArray>();
-     for(int i=0; i<3; i++) {
-        JsonArray c = shroudWarna.add<JsonArray>();
-        c.add(shroudConfig.stateKiri.warna[i].r); c.add(shroudConfig.stateKiri.warna[i].g); c.add(shroudConfig.stateKiri.warna[i].b);
-    }
+  // Shroud
+  JsonObject shroud = state["shroud"].to<JsonObject>();
+  shroud["mode"] = shroudConfig.mode;
+  shroud["kecepatan"] = shroudConfig.kecepatan;
+  JsonObject shroudStateKiri = shroud["stateKiri"].to<JsonObject>();
+  shroudStateKiri["kecerahan"] = shroudConfig.stateKiri.kecerahan;
+  JsonArray shroudWarna = shroudStateKiri["warna"].to<JsonArray>();
+  for (int i = 0; i < 3; i++)
+  {
+    JsonArray c = shroudWarna.add<JsonArray>();
+    c.add(shroudConfig.stateKiri.warna[i].r);
+    c.add(shroudConfig.stateKiri.warna[i].g);
+    c.add(shroudConfig.stateKiri.warna[i].b);
+  }
 
-    // Demon
-    JsonObject demon = state["demon"].to<JsonObject>();
-    demon["mode"] = demonConfig.mode;
-    demon["kecepatan"] = demonConfig.kecepatan;
-    JsonObject demonStateKiri = demon["stateKiri"].to<JsonObject>();
-    demonStateKiri["kecerahan"] = demonConfig.stateKiri.kecerahan;
-    JsonArray demonWarna = demonStateKiri["warna"].to<JsonArray>();
-     for(int i=0; i<3; i++) {
-        JsonArray c = demonWarna.add<JsonArray>();
-        c.add(demonConfig.stateKiri.warna[i].r); c.add(demonConfig.stateKiri.warna[i].g); c.add(demonConfig.stateKiri.warna[i].b);
-    }
-    
-    // Sein
-    JsonObject sein = state["sein"].to<JsonObject>();
-    sein["mode"] = seinConfig.mode;
-    sein["kecepatan"] = seinConfig.kecepatan;
-    JsonArray seinWarna = sein["warna"].to<JsonArray>();
-    seinWarna.add(seinConfig.warna.r); seinWarna.add(seinConfig.warna.g); seinWarna.add(seinConfig.warna.b);
+  // Demon
+  JsonObject demon = state["demon"].to<JsonObject>();
+  demon["mode"] = demonConfig.mode;
+  demon["kecepatan"] = demonConfig.kecepatan;
+  JsonObject demonStateKiri = demon["stateKiri"].to<JsonObject>();
+  demonStateKiri["kecerahan"] = demonConfig.stateKiri.kecerahan;
+  JsonArray demonWarna = demonStateKiri["warna"].to<JsonArray>();
+  for (int i = 0; i < 3; i++)
+  {
+    JsonArray c = demonWarna.add<JsonArray>();
+    c.add(demonConfig.stateKiri.warna[i].r);
+    c.add(demonConfig.stateKiri.warna[i].g);
+    c.add(demonConfig.stateKiri.warna[i].b);
+  }
 
-    // LED Counts
-    JsonObject counts = state["ledCounts"].to<JsonObject>();
-    counts["alis"] = ledCounts.alis;
-    counts["shroud"] = ledCounts.shroud;
-    counts["demon"] = ledCounts.demon;
-    counts["sein"] = ledCounts.sein;
+  // Sein
+  JsonObject sein = state["sein"].to<JsonObject>();
+  sein["mode"] = seinConfig.mode;
+  sein["kecepatan"] = seinConfig.kecepatan;
+  JsonArray seinWarna = sein["warna"].to<JsonArray>();
+  seinWarna.add(seinConfig.warna.r);
+  seinWarna.add(seinConfig.warna.g);
+  seinWarna.add(seinConfig.warna.b);
 
-    // Welcome
-    JsonObject welcome = state["welcome"].to<JsonObject>();
-    welcome["mode"] = welcomeConfig.mode;
-    welcome["durasi"] = welcomeConfig.durasi;
-    
-    String response;
-    serializeJson(doc, response);
-    request->send(200, "application/json", response);
+  // LED Counts
+  JsonObject counts = state["ledCounts"].to<JsonObject>();
+  counts["alis"] = ledCounts.alis;
+  counts["shroud"] = ledCounts.shroud;
+  counts["demon"] = ledCounts.demon;
+  counts["sein"] = ledCounts.sein;
+
+  // Welcome
+  JsonObject welcome = state["welcome"].to<JsonObject>();
+  welcome["mode"] = welcomeConfig.mode;
+  welcome["durasi"] = welcomeConfig.durasi;
+
+  String response;
+  serializeJson(doc, response);
+  request->send(200, "application/json", response);
 }
 
-void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, LightConfig &config) {
-    JsonObject obj = json.as<JsonObject>();
-    bool needsSave = false;
-    
-    if (obj.containsKey("mode")) {
-        config.mode = obj["mode"];
-        needsSave = true;
-    }
-    if (obj.containsKey("kecepatan")) {
-        config.kecepatan = obj["kecepatan"];
-        needsSave = true;
-    }
-    if (obj.containsKey("kecerahan")) {
-        config.stateKiri.kecerahan = obj["kecerahan"];
-        needsSave = true;
-    }
-    if (obj.containsKey("r") && obj.containsKey("g") && obj.containsKey("b") && obj.containsKey("colorIndex")) {
-        uint8_t index = obj["colorIndex"];
-        if (index < 3) {
-            config.stateKiri.warna[index] = CRGB(obj["r"], obj["g"], obj["b"]);
-            needsSave = true;
-        }
-    }
+void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, LightConfig &config)
+{
+  JsonObject obj = json.as<JsonObject>();
+  bool needsSave = false;
 
-    if(needsSave) simpanPengaturan();
-    request->send(200, "text/plain", "OK");
-}
-
-void handleSetModeSein(AsyncWebServerRequest *request, JsonVariant &json) {
-    JsonObject obj = json.as<JsonObject>();
-    bool needsSave = false;
-
-    if (obj.containsKey("mode")) {
-        seinConfig.mode = obj["mode"];
-        needsSave = true;
+  // Ganti obj.containsKey("key") menjadi !obj["key"].isNull()
+  if (!obj["mode"].isNull())
+  {
+    config.mode = obj["mode"];
+    needsSave = true;
+  }
+  if (!obj["kecepatan"].isNull())
+  {
+    config.kecepatan = obj["kecepatan"];
+    needsSave = true;
+  }
+  if (!obj["kecerahan"].isNull())
+  {
+    config.stateKiri.kecerahan = obj["kecerahan"];
+    needsSave = true;
+  }
+  // Pengecekan untuk beberapa key juga diubah
+  if (!obj["r"].isNull() && !obj["g"].isNull() && !obj["b"].isNull() && !obj["colorIndex"].isNull())
+  {
+    uint8_t index = obj["colorIndex"];
+    if (index < 3)
+    {
+      config.stateKiri.warna[index] = CRGB(obj["r"], obj["g"], obj["b"]);
+      needsSave = true;
     }
-    if (obj.containsKey("kecepatan")) {
-        seinConfig.kecepatan = obj["kecepatan"];
-        needsSave = true;
-    }
-    if (obj.containsKey("r") && obj.containsKey("g") && obj.containsKey("b")) {
-        seinConfig.warna = CRGB(obj["r"], obj["g"], obj["b"]);
-        needsSave = true;
-    }
+  }
 
-    if(needsSave) simpanPengaturan();
-    request->send(200, "text/plain", "OK");
-}
-
-void handleSetLedCounts(AsyncWebServerRequest *request, JsonVariant &json) {
-    JsonObject obj = json.as<JsonObject>();
-    ledCounts.alis = obj["alis"] | ledCounts.alis;
-    ledCounts.shroud = obj["shroud"] | ledCounts.shroud;
-    ledCounts.demon = obj["demon"] | ledCounts.demon;
-    ledCounts.sein = obj["sein"] | ledCounts.sein;
+  if (needsSave)
     simpanPengaturan();
-    request->send(200, "text/plain", "OK");
+  request->send(200, "text/plain", "OK");
 }
 
-void handleSetWelcome(AsyncWebServerRequest *request, JsonVariant &json) {
-    JsonObject obj = json.as<JsonObject>();
-    welcomeConfig.mode = obj["mode"] | welcomeConfig.mode;
-    welcomeConfig.durasi = obj["durasi"] | welcomeConfig.durasi;
+void handleSetModeSein(AsyncWebServerRequest *request, JsonVariant &json)
+{
+  JsonObject obj = json.as<JsonObject>();
+  bool needsSave = false;
+
+  // Ganti obj.containsKey("key") menjadi !obj["key"].isNull()
+  if (!obj["mode"].isNull())
+  {
+    seinConfig.mode = obj["mode"];
+    needsSave = true;
+  }
+  if (!obj["kecepatan"].isNull())
+  {
+    seinConfig.kecepatan = obj["kecepatan"];
+    needsSave = true;
+  }
+  // Pengecekan untuk beberapa key juga diubah
+  if (!obj["r"].isNull() && !obj["g"].isNull() && !obj["b"].isNull())
+  {
+    seinConfig.warna = CRGB(obj["r"], obj["g"], obj["b"]);
+    needsSave = true;
+  }
+
+  if (needsSave)
     simpanPengaturan();
-    request->send(200, "text/plain", "OK");
+  request->send(200, "text/plain", "OK");
 }
 
-void handlePreviewWelcome(AsyncWebServerRequest *request) {
-    isWelcomeActive = true;
-    welcomeStartTime = 0; // Reset timer
-    request->send(200, "text/plain", "OK");
+void handleSetLedCounts(AsyncWebServerRequest *request, JsonVariant &json)
+{
+  JsonObject obj = json.as<JsonObject>();
+  ledCounts.alis = obj["alis"] | ledCounts.alis;
+  ledCounts.shroud = obj["shroud"] | ledCounts.shroud;
+  ledCounts.demon = obj["demon"] | ledCounts.demon;
+  ledCounts.sein = obj["sein"] | ledCounts.sein;
+  simpanPengaturan();
+  request->send(200, "text/plain", "OK");
 }
 
-void handleGetPresetName(AsyncWebServerRequest *request) {
-    if (!request->hasParam("slot")) {
-        request->send(400, "text/plain", "Bad Request");
-        return;
+void handleSetWelcome(AsyncWebServerRequest *request, JsonVariant &json)
+{
+  JsonObject obj = json.as<JsonObject>();
+  welcomeConfig.mode = obj["mode"] | welcomeConfig.mode;
+  welcomeConfig.durasi = obj["durasi"] | welcomeConfig.durasi;
+  simpanPengaturan();
+  request->send(200, "text/plain", "OK");
+}
+
+void handlePreviewWelcome(AsyncWebServerRequest *request)
+{
+  isWelcomeActive = true;
+  welcomeStartTime = 0; // Reset timer
+  request->send(200, "text/plain", "OK");
+}
+
+void handleGetPresetName(AsyncWebServerRequest *request)
+{
+  if (!request->hasParam("slot"))
+  {
+    request->send(400, "text/plain", "Bad Request");
+    return;
+  }
+  int slot = request->getParam("slot")->value().toInt();
+
+  File file = LittleFS.open("/presets.json", "r");
+  if (!file)
+  {
+    request->send(500, "text/plain", "Preset file not found");
+    return;
+  }
+
+  JsonDocument doc;
+  deserializeJson(doc, file);
+  file.close();
+
+  JsonArray presets = doc.as<JsonArray>();
+  for (JsonObject p : presets)
+  {
+    if (p["slot"] == slot)
+    {
+      request->send(200, "application/json", "{\"name\":\"" + p["name"].as<String>() + "\"}");
+      return;
     }
-    int slot = request->getParam("slot")->value().toInt();
-    
-    File file = LittleFS.open("/presets.json", "r");
-    if (!file) {
-        request->send(500, "text/plain", "Preset file not found");
-        return;
-    }
-
-    JsonDocument doc;
-    deserializeJson(doc, file);
-    file.close();
-
-    JsonArray presets = doc.as<JsonArray>();
-    for (JsonObject p : presets) {
-        if (p["slot"] == slot) {
-            request->send(200, "application/json", "{\"name\":\"" + p["name"].as<String>() + "\"}");
-            return;
-        }
-    }
-    request->send(404, "text/plain", "Slot not found");
+  }
+  request->send(404, "text/plain", "Slot not found");
 }
 
-void handleSavePreset(AsyncWebServerRequest *request, JsonVariant &json) {
-    // Implementasi penyimpanan preset dari JSON
-    // Mirip dengan handleLoadPreset, tapi sebaliknya
-    request->send(200, "text/plain", "Preset Saved (Implementasi diperlukan)");
+void handleSavePreset(AsyncWebServerRequest *request, JsonVariant &json)
+{
+  // Implementasi penyimpanan preset dari JSON
+  // Mirip dengan handleLoadPreset, tapi sebaliknya
+  request->send(200, "text/plain", "Preset Saved (Implementasi diperlukan)");
 }
 
-void handleLoadPreset(AsyncWebServerRequest *request, JsonVariant &json) {
-    // Implementasi pemuatan preset dari JSON
-    request->send(200, "text/plain", "Preset Loaded (Implementasi diperlukan)");
+void handleLoadPreset(AsyncWebServerRequest *request, JsonVariant &json)
+{
+  // Implementasi pemuatan preset dari JSON
+  request->send(200, "text/plain", "Preset Loaded (Implementasi diperlukan)");
 }
 
-void handleResetFactory(AsyncWebServerRequest *request) {
+void handleResetFactory(AsyncWebServerRequest *request)
+{
   resetToDefaults();
   request->send(200, "text/plain", "OK");
   delay(1000);
   ESP.restart();
 }
 
-void simpanPengaturan() {
+void simpanPengaturan()
+{
   prefs.begin("config-v20", false);
   prefs.putUChar("version", CONFIG_VERSION);
   prefs.putBytes("alis", &alisConfig, sizeof(LightConfig));
@@ -472,9 +537,11 @@ void simpanPengaturan() {
   Serial.println("Pengaturan disimpan.");
 }
 
-void bacaPengaturan() {
+void bacaPengaturan()
+{
   prefs.begin("config-v20", true);
-  if (prefs.getUChar("version", 0) != CONFIG_VERSION) {
+  if (prefs.getUChar("version", 0) != CONFIG_VERSION)
+  {
     prefs.end();
     resetToDefaults();
     return;
@@ -488,7 +555,8 @@ void bacaPengaturan() {
   prefs.end();
 }
 
-void resetToDefaults() {
+void resetToDefaults()
+{
   alisConfig = LightConfig();
   shroudConfig = LightConfig();
   demonConfig = LightConfig();
@@ -500,17 +568,21 @@ void resetToDefaults() {
   Serial.println("State dikembalikan ke default.");
 }
 
-void initializePresets() {
-  if (LittleFS.exists("/presets.json")) return;
-  
+void initializePresets()
+{
+  if (LittleFS.exists("/presets.json"))
+    return;
+
   File file = LittleFS.open("/presets.json", "w");
-  if (!file) {
-      Serial.println("Gagal membuat file preset");
-      return;
+  if (!file)
+  {
+    Serial.println("Gagal membuat file preset");
+    return;
   }
   JsonDocument doc;
   JsonArray presets = doc.to<JsonArray>();
-  for (int i = 1; i <= 5; i++) {
+  for (int i = 1; i <= 5; i++)
+  {
     JsonObject p = presets.add<JsonObject>();
     p["slot"] = i;
     p["name"] = "Preset " + String(i);
