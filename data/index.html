@@ -60,7 +60,7 @@
       <h1>AERI LIGHT</h1>
       <div id="statusIndicator">
         <div id="statusIcon" class="disconnected"></div>
-        <span id="statusText">Disconnected</span>
+        <span id="statusText">Terputus</span>
       </div>
     </header>
 
@@ -81,7 +81,13 @@
       <div id="tabKontrol" class="tab-content active">
         <section class="cyber-panel">
           <div class="panel-body">
-            <div id="savingIndicator" class="saving-indicator" style="display: none;">Menyimpan...</div>
+            <div
+              id="savingIndicator"
+              class="saving-indicator"
+              style="display: none"
+            >
+              Menyimpan...
+            </div>
             <div class="sync-toggle-container">
               <label for="syncSwitch">SINKRONKAN (ALIS, SHROUD, DEMON)</label>
               <label class="switch"
@@ -118,9 +124,9 @@
               /><label for="controlTargetSein">SEIN</label>
             </div>
             <div id="alis-controls-container"></div>
-            <div id="shroud-controls-container" style="display: none;"></div>
-            <div id="demon-controls-container" style="display: none;"></div>
-            <div id="sein-controls-container" style="display: none;"></div>
+            <div id="shroud-controls-container" style="display: none"></div>
+            <div id="demon-controls-container" style="display: none"></div>
+            <div id="sein-controls-container" style="display: none"></div>
           </div>
         </section>
       </div>
@@ -169,7 +175,7 @@
                 class="cyber-input"
               />
             </div>
-             <div class="control-group">
+            <div class="control-group">
               <label for="ledCountShroud">Jumlah LED Shroud</label
               ><input
                 type="number"
@@ -179,7 +185,7 @@
                 class="cyber-input"
               />
             </div>
-             <div class="control-group">
+            <div class="control-group">
               <label for="ledCountDemon">Jumlah LED Demon</label
               ><input
                 type="number"
@@ -189,7 +195,7 @@
                 class="cyber-input"
               />
             </div>
-             <div class="control-group">
+            <div class="control-group">
               <label for="ledCountSein">Jumlah LED Sein</label
               ><input
                 type="number"
@@ -242,8 +248,8 @@
       </div>
     </main>
 
-    <script src="config.js"></script>
-    <script src="app.js"></script>
+    <script src="config.js" defer></script>
+    <script src="app.js" defer></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {

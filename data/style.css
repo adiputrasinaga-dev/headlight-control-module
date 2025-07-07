@@ -1,14 +1,10 @@
 /*
  * ===================================================================
- * AERI LIGHT v20.0 - STYLESHEET (STABILITY & UX UPDATE)
+ * AERI LIGHT v20.1 - STYLESHEET (FINAL)
  * ===================================================================
  * Deskripsi Perubahan:
- * - ADD: Menambahkan style untuk .saving-indicator, memberikan
- * feedback visual saat PWA berkomunikasi dengan perangkat.
- * - ADD: Menambahkan style untuk .panel-synced untuk memberi
- * sorotan visual saat mode sinkronisasi aktif.
- * - FIX: Mempertahankan perbaikan z-index untuk dropdown dari
- * versi sebelumnya.
+ * - Menambahkan style untuk .saving-indicator dan .panel-synced.
+ * - Menambahkan properti 'appearance' standar untuk kompatibilitas.
  * ===================================================================
  */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700&display=swap");
@@ -169,7 +165,6 @@ details.cyber-panel,
   transition: background-color 0.3s, border-color 0.3s;
 }
 
-/* Penanda panel yang sedang disinkronkan */
 .cyber-panel.panel-synced {
   border-color: var(--success-color);
   box-shadow: 0 0 15px var(--success-color),
@@ -179,7 +174,7 @@ details.cyber-panel,
 .cyber-panel .panel-body,
 details.cyber-panel .panel-body {
   padding: 25px;
-  position: relative; /* Diperlukan untuk positioning .saving-indicator */
+  position: relative;
 }
 details > summary {
   display: flex;
@@ -207,12 +202,10 @@ details[open] > summary {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  /* PERBAIKAN: Menambahkan z-index untuk mengatasi bug dropdown */
   position: relative;
   z-index: 1;
 }
 .control-group:focus-within {
-  /* Memberi z-index lebih tinggi saat elemen di dalamnya aktif */
   z-index: 2;
 }
 .control-group > label,
@@ -695,11 +688,10 @@ input:checked + .slider:before {
   border: 1px solid var(--border-color);
 }
 
-/* Style untuk indikator "Menyimpan..." */
 .saving-indicator {
   position: absolute;
   top: 20px;
-  right: 80px; /* Disesuaikan agar tidak tumpang tindih */
+  right: 80px;
   background-color: var(--info-color);
   color: var(--bg-color);
   padding: 3px 10px;
