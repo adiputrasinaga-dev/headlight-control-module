@@ -1,16 +1,18 @@
 /*
  * ===================================================================
- * AERI LIGHT v21.0 - FIRMWARE (FINAL BUG FIXES)
+ * AERI LIGHT v24.0 - FIRMWARE (INDEPENDENT SIDE CONTROL)
  * ===================================================================
  * Deskripsi Perubahan:
- * - IMPLEMENT: Fungsionalitas penuh untuk handleSavePreset() dan
- * handleLoadPreset(), memungkinkan pengguna menyimpan dan memuat
- * konfigurasi dari file presets.json.
- * - UX: handleGetPresetName() sekarang mengirimkan ringkasan
- * konten preset (misal: mode Alis) untuk ditampilkan di PWA.
- * - REFACTOR: Menambahkan fungsi pembantu deserializeState() dan
- * deserializeLightConfig() untuk memuat state dari objek JSON.
- * - FIX: Menghilangkan peringatan deprecated dari ArduinoJson.
+ * - FIX: Menghapus logika 'memcpy' yang menyebabkan pengaturan sisi
+ * kiri menimpa sisi kanan.
+ * - ADD: Logika di dalam loop() sekarang memanggil jalankanModeLampu()
+ * secara terpisah untuk sisi kiri dan kanan, menggunakan
+ * stateKiri dan stateKanan.
+ * - UPDATE: handleSetModeLampu() dan handleWsMessage() sekarang
+ * menerima parameter 'target' untuk menerapkan perubahan ke 'kiri',
+ * 'kanan', atau 'keduanya'.
+ * - UPDATE: Serialisasi dan deserialisasi state sekarang mencakup
+ * stateKanan untuk penyimpanan dan pemuatan preset yang benar.
  * ===================================================================
  */
 
@@ -34,18 +36,23 @@
 // --- Konfigurasi ---
 const char *AP_SSID = "AERI_LIGHT";
 const char *AP_PASSWORD = "12345678";
-#define PIN_ALIS_KIRI 5
-#define PIN_ALIS_KANAN 19
-#define PIN_SHROUD_KIRI 18
-#define PIN_SHROUD_KANAN 4
-#define PIN_DEMON_KIRI 17
-#define PIN_DEMON_KANAN 16
-#define PIN_INPUT_SEIN_KIRI 23
-#define PIN_INPUT_SEIN_KANAN 26
+
+#define PIN_INPUT_SEIN_KIRI 32
+#define PIN_INPUT_SEIN_KANAN 19
+
+#define PIN_ALIS_KIRI 33
+#define PIN_ALIS_KANAN 18
+
+#define PIN_SHROUD_KIRI 25
+#define PIN_SHROUD_KANAN 5
+
+#define PIN_DEMON_KIRI 14
+#define PIN_DEMON_KANAN 4
+
 #define MAX_LEDS 250
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
-const uint8_t CONFIG_VERSION = 22;
+const uint8_t CONFIG_VERSION = 24;
 
 // === State Management Structs ===
 struct LightState
@@ -56,9 +63,10 @@ struct LightState
 struct LightConfig
 {
   LightState stateKiri;
+  LightState stateKanan;
   uint8_t mode = 0;
   uint8_t kecepatan = 50;
-};
+}; // Ditambahkan stateKanan
 struct SeinConfig
 {
   uint8_t mode = 0;
@@ -83,6 +91,7 @@ LightConfig alisConfig, shroudConfig, demonConfig;
 SeinConfig seinConfig;
 LedCountConfig ledCounts;
 WelcomeConfig welcomeConfig;
+bool masterPowerState = true;
 
 CRGB ledsAlisKiri[MAX_LEDS], ledsAlisKanan[MAX_LEDS], ledsShroudKiri[MAX_LEDS], ledsShroudKanan[MAX_LEDS], ledsDemonKiri[MAX_LEDS], ledsDemonKanan[MAX_LEDS];
 Preferences prefs;
@@ -101,11 +110,9 @@ typedef void (*EffectFunction)(EffectParams &);
 EffectFunction effectRegistry[] = {solid, breathing, rainbow, comet, cylonScanner, twinkle, fire, gradientShift, plasmaBall, theaterChase, colorWipe, pride, pacifica, bouncingBalls, meteor, confetti, juggle, sinelon, noise, matrix, ripple, larsonScanner, twoColorWipe, lightning};
 const char *effectNames[] = {"Solid", "Breathing", "Rainbow", "Comet", "Cylon Scanner", "Twinkle", "Fire", "Gradient Shift", "Plasma Ball", "Theater Chase", "Color Wipe", "Pride", "Pacifica", "Bouncing Balls", "Meteor", "Confetti", "Juggle", "Sinelon", "Noise", "Matrix", "Ripple", "Larson Scanner", "Two-Color Wipe", "Lightning"};
 const uint8_t numEffects = sizeof(effectRegistry) / sizeof(effectRegistry[0]);
-
 typedef void (*WelcomeEffectFunction)(WelcomeEffectParams &);
 WelcomeEffectFunction welcomeEffectRegistry[] = {WelcomeEffects::powerOnScan, WelcomeEffects::ignitionBurst, WelcomeEffects::spectrumResolve, WelcomeEffects::theaterChaseWelcome, WelcomeEffects::dualCometWelcome, WelcomeEffects::centerFill, CustomWelcomeEffects::charging, CustomWelcomeEffects::glitch, CustomWelcomeEffects::sonar, CustomWelcomeEffects::burning, CustomWelcomeEffects::warpSpeed, CustomWelcomeEffects::dna, CustomWelcomeEffects::laser, CustomWelcomeEffects::heartbeat, CustomWelcomeEffects::liquid, CustomWelcomeEffects::spotlights};
 const uint8_t numWelcomeEffects = sizeof(welcomeEffectRegistry) / sizeof(welcomeEffectRegistry[0]);
-
 typedef void (*SeinEffectFunction)(SeinEffectParams &);
 SeinEffectFunction seinEffectRegistry[] = {SeinEffects::sequential, SeinEffects::pulsingArrow, SeinEffects::fillAndFlush, SeinEffects::cometTrail};
 const uint8_t numSeinEffects = sizeof(seinEffectRegistry) / sizeof(seinEffectRegistry[0]);
@@ -116,12 +123,13 @@ void deserializeState(JsonObject &stateObj);
 void deserializeLightConfig(JsonObject &lightObj, LightConfig &config);
 void broadcastState();
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len);
+void handleWsMessage(AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len);
 void resetToDefaults();
 void simpanPengaturan();
 void bacaPengaturan();
 void jalankanModeWelcome();
 void jalankanModeSein(bool isKiriActive, bool isKananActive);
-void jalankanModeLampu(LightConfig &config, CRGB *leds, uint8_t ledCount);
+void jalankanModeLampu(LightConfig &config, LightState &sideState, CRGB *leds, uint8_t ledCount);
 void handleGetState(AsyncWebServerRequest *request);
 void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, LightConfig &config);
 void handleSetModeSein(AsyncWebServerRequest *request, JsonVariant &json);
@@ -162,6 +170,8 @@ void setup()
   Serial.println(WiFi.softAPIP());
 
   ws.onEvent(onWsEvent);
+  // Heartbeat: send PING every 5s, close if no PONG after 7s (2 tries)
+  //  ws.enableHeartbeat(5000, 7000, 2); // Not available in AsyncWebSocket
   server.addHandler(&ws);
 
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
@@ -233,21 +243,24 @@ void loop()
       stateChanged = true;
     }
     lastSeinState = false;
-    if (isWelcomeActive)
+    if (!masterPowerState)
+    {
+      FastLED.clear();
+    }
+    else if (isWelcomeActive)
     {
       jalankanModeWelcome();
     }
     else
     {
-      jalankanModeLampu(alisConfig, ledsAlisKiri, ledCounts.alis);
-      jalankanModeLampu(shroudConfig, ledsShroudKiri, ledCounts.shroud);
-      jalankanModeLampu(demonConfig, ledsDemonKiri, ledCounts.demon);
+      jalankanModeLampu(alisConfig, alisConfig.stateKiri, ledsAlisKiri, ledCounts.alis);
+      jalankanModeLampu(alisConfig, alisConfig.stateKanan, ledsAlisKanan, ledCounts.alis);
+      jalankanModeLampu(shroudConfig, shroudConfig.stateKiri, ledsShroudKiri, ledCounts.shroud);
+      jalankanModeLampu(shroudConfig, shroudConfig.stateKanan, ledsShroudKanan, ledCounts.shroud);
+      jalankanModeLampu(demonConfig, demonConfig.stateKiri, ledsDemonKiri, ledCounts.demon);
+      jalankanModeLampu(demonConfig, demonConfig.stateKanan, ledsDemonKanan, ledCounts.demon);
     }
   }
-
-  memcpy(ledsAlisKanan, ledsAlisKiri, sizeof(CRGB) * ledCounts.alis);
-  memcpy(ledsShroudKanan, ledsShroudKiri, sizeof(CRGB) * ledCounts.shroud);
-  memcpy(ledsDemonKanan, ledsDemonKiri, sizeof(CRGB) * ledCounts.demon);
 
   FastLED.show();
 
@@ -273,25 +286,59 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
   {
     Serial.printf("WebSocket client #%u disconnected\n", client->id());
   }
+  else if (type == WS_EVT_DATA)
+  {
+    handleWsMessage(client, arg, data, len);
+  }
+}
+
+void handleWsMessage(AsyncWebSocketClient *client, void *arg, uint8_t *data, size_t len)
+{
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, data, len);
+  if (error)
+  {
+    Serial.println(error.c_str());
+    return;
+  }
+
+  const char *type = doc["type"];
+  if (!type)
+    return;
+
+  if (strcmp(type, "master_power") == 0)
+  {
+    masterPowerState = doc["value"];
+    simpanPengaturan();
+    stateChanged = true;
+  }
 }
 
 void serializeState(JsonDocument &doc)
 {
   JsonObject state = doc.to<JsonObject>();
+  state["masterPowerState"] = masterPowerState;
+
   auto serializeLight = [&](JsonObject &obj, LightConfig &cfg)
   {
     obj["mode"] = cfg.mode;
     obj["kecepatan"] = cfg.kecepatan;
-    JsonObject stateKiri = obj["stateKiri"].to<JsonObject>();
-    stateKiri["kecerahan"] = cfg.stateKiri.kecerahan;
-    JsonArray warna = stateKiri["warna"].to<JsonArray>();
-    for (int i = 0; i < 3; i++)
+    auto serializeSide = [&](JsonObject &sideObj, LightState &sideState)
     {
-      JsonArray c = warna.add<JsonArray>();
-      c.add(cfg.stateKiri.warna[i].r);
-      c.add(cfg.stateKiri.warna[i].g);
-      c.add(cfg.stateKiri.warna[i].b);
-    }
+      sideObj["kecerahan"] = sideState.kecerahan;
+      JsonArray warna = sideObj["warna"].to<JsonArray>();
+      for (int i = 0; i < 3; i++)
+      {
+        JsonArray c = warna.add<JsonArray>();
+        c.add(sideState.warna[i].r);
+        c.add(sideState.warna[i].g);
+        c.add(sideState.warna[i].b);
+      }
+    };
+    JsonObject stateKiri = obj["stateKiri"].to<JsonObject>();
+    serializeSide(stateKiri, cfg.stateKiri);
+    JsonObject stateKanan = obj["stateKanan"].to<JsonObject>();
+    serializeSide(stateKanan, cfg.stateKanan);
   };
   JsonObject alis = state["alis"].to<JsonObject>();
   serializeLight(alis, alisConfig);
@@ -325,28 +372,35 @@ void deserializeLightConfig(JsonObject &lightObj, LightConfig &config)
     return;
   config.mode = lightObj["mode"] | config.mode;
   config.kecepatan = lightObj["kecepatan"] | config.kecepatan;
-  JsonObject stateKiri = lightObj["stateKiri"];
-  if (!stateKiri.isNull())
+
+  auto deserializeSide = [&](JsonObject &sideObj, LightState &sideState)
   {
-    config.stateKiri.kecerahan = stateKiri["kecerahan"] | config.stateKiri.kecerahan;
-    JsonArray warna = stateKiri["warna"];
+    if (sideObj.isNull())
+      return;
+    sideState.kecerahan = sideObj["kecerahan"] | sideState.kecerahan;
+    JsonArray warna = sideObj["warna"];
     if (!warna.isNull())
     {
       for (int i = 0; i < 3 && i < warna.size(); i++)
       {
         JsonArray c = warna[i];
-        config.stateKiri.warna[i].r = c[0];
-        config.stateKiri.warna[i].g = c[1];
-        config.stateKiri.warna[i].b = c[2];
+        sideState.warna[i].r = c[0];
+        sideState.warna[i].g = c[1];
+        sideState.warna[i].b = c[2];
       }
     }
-  }
+  };
+  JsonObject stateKiri = lightObj["stateKiri"];
+  deserializeSide(stateKiri, config.stateKiri);
+  JsonObject stateKanan = lightObj["stateKanan"];
+  deserializeSide(stateKanan, config.stateKanan);
 }
 
 void deserializeState(JsonObject &stateObj)
 {
   if (stateObj.isNull())
     return;
+  masterPowerState = stateObj["masterPowerState"] | masterPowerState;
   JsonObject alisObj = stateObj["alis"];
   deserializeLightConfig(alisObj, alisConfig);
   JsonObject shroudObj = stateObj["shroud"];
@@ -408,6 +462,8 @@ void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, Light
 {
   JsonObject obj = json.as<JsonObject>();
   bool needsSave = false;
+  String target = obj["target"] | "keduanya";
+
   if (!obj["mode"].isNull())
   {
     config.mode = obj["mode"];
@@ -418,20 +474,43 @@ void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, Light
     config.kecepatan = obj["kecepatan"];
     needsSave = true;
   }
-  if (!obj["kecerahan"].isNull())
+
+  LightState *statesToUpdate[2] = {nullptr, nullptr};
+  if (target == "kiri")
   {
-    config.stateKiri.kecerahan = obj["kecerahan"];
-    needsSave = true;
+    statesToUpdate[0] = &config.stateKiri;
   }
-  if (!obj["r"].isNull() && !obj["g"].isNull() && !obj["b"].isNull() && !obj["colorIndex"].isNull())
+  else if (target == "kanan")
   {
-    uint8_t index = obj["colorIndex"];
-    if (index < 3)
+    statesToUpdate[0] = &config.stateKanan;
+  }
+  else
+  { // keduanya
+    statesToUpdate[0] = &config.stateKiri;
+    statesToUpdate[1] = &config.stateKanan;
+  }
+
+  for (int i = 0; i < 2; ++i)
+  {
+    if (statesToUpdate[i] == nullptr)
+      continue;
+    if (!obj["kecerahan"].isNull())
     {
-      config.stateKiri.warna[index] = CRGB(obj["r"], obj["g"], obj["b"]);
+      int brightness_percent = obj["kecerahan"];
+      statesToUpdate[i]->kecerahan = map(brightness_percent, 0, 100, 0, 255);
       needsSave = true;
     }
+    if (!obj["r"].isNull() && !obj["g"].isNull() && !obj["b"].isNull() && !obj["colorIndex"].isNull())
+    {
+      uint8_t index = obj["colorIndex"];
+      if (index < 3)
+      {
+        statesToUpdate[i]->warna[index] = CRGB(obj["r"], obj["g"], obj["b"]);
+        needsSave = true;
+      }
+    }
   }
+
   if (needsSave)
   {
     simpanPengaturan();
@@ -631,16 +710,19 @@ void handleResetFactory(AsyncWebServerRequest *request)
   ESP.restart();
 }
 
-void jalankanModeLampu(LightConfig &config, CRGB *leds, uint8_t ledCount)
+void jalankanModeLampu(LightConfig &config, LightState &sideState, CRGB *leds, uint8_t ledCount)
 {
   fill_solid(leds, MAX_LEDS, CRGB::Black);
   if (ledCount == 0 || config.mode >= numEffects)
     return;
+
   uint8_t originalBrightness = FastLED.getBrightness();
-  FastLED.setBrightness(config.stateKiri.kecerahan);
+  FastLED.setBrightness(sideState.kecerahan);
+
   uint8_t mapped_speed = map(config.kecepatan, 0, 100, 1, 15);
-  EffectParams params = {leds, (uint16_t)ledCount, animStep, mapped_speed, config.stateKiri.warna[0], config.stateKiri.warna[1], config.stateKiri.warna[2]};
+  EffectParams params = {leds, (uint16_t)ledCount, animStep, mapped_speed, sideState.warna[0], sideState.warna[1], sideState.warna[2]};
   effectRegistry[config.mode](params);
+
   FastLED.setBrightness(originalBrightness);
 }
 
@@ -681,7 +763,7 @@ void jalankanModeWelcome()
 
 void simpanPengaturan()
 {
-  prefs.begin("config-v22", false);
+  prefs.begin("config-v24", false);
   prefs.putUChar("version", CONFIG_VERSION);
   prefs.putBytes("alis", &alisConfig, sizeof(LightConfig));
   prefs.putBytes("shroud", &shroudConfig, sizeof(LightConfig));
@@ -689,13 +771,14 @@ void simpanPengaturan()
   prefs.putBytes("sein", &seinConfig, sizeof(SeinConfig));
   prefs.putBytes("leds", &ledCounts, sizeof(LedCountConfig));
   prefs.putBytes("welcome", &welcomeConfig, sizeof(WelcomeConfig));
+  prefs.putBool("masterPower", masterPowerState);
   prefs.end();
   Serial.println("Pengaturan disimpan.");
 }
 
 void bacaPengaturan()
 {
-  prefs.begin("config-v22", true);
+  prefs.begin("config-v24", true);
   if (prefs.getUChar("version", 0) != CONFIG_VERSION)
   {
     prefs.end();
@@ -708,6 +791,7 @@ void bacaPengaturan()
   prefs.getBytes("sein", &seinConfig, sizeof(SeinConfig));
   prefs.getBytes("leds", &ledCounts, sizeof(LedCountConfig));
   prefs.getBytes("welcome", &welcomeConfig, sizeof(WelcomeConfig));
+  masterPowerState = prefs.getBool("masterPower", true);
   prefs.end();
 }
 
@@ -719,6 +803,7 @@ void resetToDefaults()
   seinConfig = SeinConfig();
   ledCounts = LedCountConfig();
   welcomeConfig = WelcomeConfig();
+  masterPowerState = true;
   isWelcomeActive = true;
   simpanPengaturan();
   Serial.println("State dikembalikan ke default.");
@@ -741,6 +826,7 @@ void initializePresets()
     JsonObject p = presets.add<JsonObject>();
     p["slot"] = i;
     p["name"] = "Preset " + String(i);
+    p["state"] = nullptr;
   }
   serializeJson(doc, file);
   file.close();

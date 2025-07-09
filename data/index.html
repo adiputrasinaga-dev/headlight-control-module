@@ -17,6 +17,7 @@
   <body>
     <div id="toast-container"></div>
 
+    <!-- Modals -->
     <div id="reset-modal" class="modal-backdrop" style="display: none">
       <div class="modal-content">
         <h3>Konfirmasi Reset Pabrik</h3>
@@ -38,7 +39,6 @@
         </div>
       </div>
     </div>
-
     <div id="color-picker-modal" class="modal-backdrop" style="display: none">
       <div class="modal-content modal-color-picker">
         <h3>Pilih Warna</h3>
@@ -88,6 +88,16 @@
             >
               Menyimpan...
             </div>
+
+            <div class="master-control">
+              <label for="masterPowerSwitch">MASTER POWER</label>
+              <label class="switch large"
+                ><input type="checkbox" id="masterPowerSwitch" /><span
+                  class="slider round"
+                ></span
+              ></label>
+            </div>
+
             <div class="sync-toggle-container">
               <label for="syncSwitch">SINKRONKAN (ALIS, SHROUD, DEMON)</label>
               <label class="switch"
@@ -96,6 +106,7 @@
                 ></span
               ></label>
             </div>
+
             <div class="radio-group system-selector">
               <input
                 type="radio"
@@ -123,6 +134,31 @@
                 value="sein"
               /><label for="controlTargetSein">SEIN</label>
             </div>
+
+            <div class="side-selector-container">
+              <div class="radio-group side-selector">
+                <input
+                  type="radio"
+                  id="sideTargetKiri"
+                  name="sideTarget"
+                  value="kiri"
+                /><label for="sideTargetKiri">KIRI</label>
+                <input
+                  type="radio"
+                  id="sideTargetKeduanya"
+                  name="sideTarget"
+                  value="keduanya"
+                  checked
+                /><label for="sideTargetKeduanya">KEDUANYA</label>
+                <input
+                  type="radio"
+                  id="sideTargetKanan"
+                  name="sideTarget"
+                  value="kanan"
+                /><label for="sideTargetKanan">KANAN</label>
+              </div>
+            </div>
+
             <div id="alis-controls-container"></div>
             <div id="shroud-controls-container" style="display: none"></div>
             <div id="demon-controls-container" style="display: none"></div>
@@ -138,24 +174,28 @@
           </summary>
           <div class="panel-body">
             <div class="control-group">
-              <label for="presetSlot">PILIH SLOT PRESET</label
-              ><select id="presetSlot" class="cyber-input"></select>
+              <label for="presetSlot">PILIH SLOT</label>
+              <select id="presetSlot" class="cyber-input"></select>
             </div>
             <div id="preset-preview" class="preset-preview-container">
               <p>Pilih slot untuk melihat pratinjau...</p>
             </div>
             <div class="control-group">
-              <label for="presetName">NAMA PRESET</label
-              ><input
+              <label for="presetName">NAMA PROFIL</label>
+              <input
                 type="text"
                 id="presetName"
                 class="cyber-input"
-                placeholder="Contoh: Mode Pameran"
+                placeholder="Contoh: Mode Touring"
               />
             </div>
             <div class="modal-actions">
-              <button id="btnLoadPreset" class="btn">Muat Preset</button
-              ><button id="btnSavePreset" class="btn">Simpan Preset</button>
+              <button id="btnLoadPreset" class="btn btn-secondary">
+                Muat Profil
+              </button>
+              <button id="btnSavePreset" class="btn">
+                Simpan Profil Saat Ini
+              </button>
             </div>
           </div>
         </details>
@@ -248,7 +288,7 @@
       </div>
     </main>
 
-    <script src="config.js" defer></script>
+    <!-- <script src="config.js" defer></script> -->
     <script src="app.js" defer></script>
     <script>
       if ("serviceWorker" in navigator) {

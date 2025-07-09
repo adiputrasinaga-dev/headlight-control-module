@@ -1,43 +1,95 @@
 /*
  * ===================================================================
- * AERI LIGHT v21.0 - MAIN APP LOGIC (FINAL BUG FIXES)
+ * AERI LIGHT v24.0 - MAIN APP LOGIC (INDEPENDENT SIDE CONTROL)
  * ===================================================================
  * Deskripsi Perubahan:
- * - UX: handlePresetSlotChange() sekarang menampilkan ringkasan
- * konten preset yang diterima dari API baru.
- * - FIX: Menambahkan error handling yang lebih baik dengan
- * membungkus loop pengiriman data sinkronisasi dalam try...catch.
- * - REFACTOR: Menggunakan class AeriApp untuk struktur yang lebih
- * baik dan mempertahankan koneksi WebSocket.
+ * - ADD: Opsi target 'kiri', 'kanan', dan 'keduanya' untuk
+ * kontrol lampu yang terisolasi atau simultan.
+ * - UPDATE: Logika rendering dan pengiriman perintah disesuaikan
+ * untuk menangani target sisi yang aktif.
+ * - ADD: Mekanisme "Heartbeat" untuk deteksi koneksi yang andal.
+ * - ADD: Mode Offline dengan data dummy saat aplikasi pertama dimuat.
  * ===================================================================
  */
 
 class AeriApp {
   constructor(config) {
-    this.config = config;
     this.state = {
       isConnected: false,
       activeTab: "Kontrol",
       activeSystem: "alis",
+      activeSide: "keduanya", // 'kiri', 'kanan', atau 'keduanya'
       isSyncMode: false,
       activeSystemForModal: null,
       activeColorSlot: 0,
+      originalColor: null,
       appState: null,
     };
     this.elements = {};
     this.modalColorPicker = null;
     this.socket = null;
     this.api = this.createApiHandler();
+    this.heartbeatTimer = null;
+
+    this.config = config || {};
+    this.config.modes = {
+      alis: (this.config.effectModes || []).map((m) => m.name),
+      shroud: (this.config.effectModes || []).map((m) => m.name),
+      demon: (this.config.effectModes || []).map((m) => m.name),
+      sein: (this.config.seinModes || []).map((m) => m.name),
+      welcome: (this.config.welcomeModes || []).map((m) => m.name),
+    };
+
+    this.throttledSendColorPreview = this.throttle(this.sendColorPreview, 100);
+    this.throttledSendControlPreview = this.throttle(
+      this.sendControlPreview,
+      100
+    );
   }
 
-  // ===================================================================
-  // INITIALIZATION & SETUP
-  // ===================================================================
+  generateDefaultState() {
+    const defaultSideState = {
+      kecerahan: 200,
+      warna: [
+        [255, 0, 0],
+        [0, 0, 255],
+        [0, 255, 0],
+      ],
+    };
+    const defaultLightState = {
+      mode: 0,
+      kecepatan: 50,
+      stateKiri: { ...defaultSideState },
+      stateKanan: { ...defaultSideState },
+    };
+    return {
+      masterPowerState: true,
+      alis: { ...defaultLightState },
+      shroud: { ...defaultLightState },
+      demon: { ...defaultLightState },
+      sein: { mode: 0, kecepatan: 50, warna: [255, 100, 0] },
+      ledCounts: { alis: 30, shroud: 30, demon: 1, sein: 30 },
+      welcome: { mode: 0, durasi: 5 },
+    };
+  }
+
+  throttle(func, limit) {
+    let inThrottle;
+    return (...args) => {
+      if (!inThrottle) {
+        func.apply(this, args);
+        inThrottle = true;
+        setTimeout(() => (inThrottle = false), limit);
+      }
+    };
+  }
 
   init() {
+    this.state.appState = this.generateDefaultState();
     this.cacheInitialElements();
     this.attachEventListeners();
     this.initColorPicker();
+    this.renderFullUI();
     this.connectWebSocket();
   }
 
@@ -47,35 +99,50 @@ class AeriApp {
     this.socket = new WebSocket(wsUrl);
 
     this.socket.onopen = () => {
-      console.log("WebSocket connection established.");
       this.setConnectionStatus(true);
     };
 
     this.socket.onclose = () => {
-      console.log("WebSocket connection closed. Retrying in 3 seconds...");
       this.setConnectionStatus(false);
-      setTimeout(() => this.connectWebSocket(), 3000);
+      setTimeout(() => this.connectWebSocket(), 2000);
+    };
+
+    this.socket.onerror = (e) => {
+      console.error("WS error", e);
+      // ensure close triggers onclose
+      this.socket.close();
     };
 
     this.socket.onmessage = (event) => {
       try {
         const newState = JSON.parse(event.data);
-        console.log("State update received via WebSocket:", newState);
         this.state.appState = newState;
         this.renderFullUI();
       } catch (error) {
-        console.error("Failed to parse WebSocket message:", error);
+        console.error("Failed to parse WS message", error);
       }
     };
+  }
 
-    this.socket.onerror = (error) => {
-      console.error("WebSocket error:", error);
+  startHeartbeat() {
+    this.resetHeartbeat();
+  }
+
+  stopHeartbeat() {
+    clearTimeout(this.heartbeatTimer);
+  }
+
+  resetHeartbeat() {
+    clearTimeout(this.heartbeatTimer);
+    this.heartbeatTimer = setTimeout(() => {
+      console.log("Heartbeat failed. Closing connection.");
       this.socket.close();
-    };
+    }, 10000);
   }
 
   cacheInitialElements() {
     this.elements = {
+      masterPowerSwitch: document.getElementById("masterPowerSwitch"),
       resetModal: {
         backdrop: document.getElementById("reset-modal"),
         confirmInput: document.getElementById("reset-confirm-input"),
@@ -98,6 +165,7 @@ class AeriApp {
       tabPengaturan: document.getElementById("tabPengaturan"),
       syncSwitch: document.getElementById("syncSwitch"),
       systemSelector: document.querySelector(".system-selector"),
+      sideSelector: document.querySelector(".side-selector"),
       controlContainers: {
         alis: document.getElementById("alis-controls-container"),
         shroud: document.getElementById("shroud-controls-container"),
@@ -125,6 +193,9 @@ class AeriApp {
   }
 
   attachEventListeners() {
+    this.elements.masterPowerSwitch.addEventListener("change", (e) =>
+      this.handleMasterPowerChange(e)
+    );
     this.elements.desktopNav.addEventListener("click", (e) =>
       this.handleTabClick(e)
     );
@@ -137,6 +208,9 @@ class AeriApp {
     this.elements.systemSelector.addEventListener("change", (e) =>
       this.handleSystemChange(e)
     );
+    this.elements.sideSelector.addEventListener("change", (e) =>
+      this.handleSideChange(e)
+    );
     this.elements.syncSwitch.addEventListener("change", (e) =>
       this.handleSyncModeChange(e)
     );
@@ -144,7 +218,7 @@ class AeriApp {
       this.handleColorPickerSave()
     );
     this.elements.colorPickerModal.cancelBtn.addEventListener("click", () =>
-      this.hideModal("colorPickerModal")
+      this.handleColorPickerCancel()
     );
     this.elements.resetModal.cancelBtn.addEventListener("click", () =>
       this.hideModal("resetModal")
@@ -192,13 +266,19 @@ class AeriApp {
         ],
       }
     );
+    this.modalColorPicker.on("color:change", (color) => {
+      this.throttledSendColorPreview(color.rgb);
+    });
   }
 
   createApiHandler() {
     const post = async (endpoint, body) => {
-      if (!this.state.isConnected && endpoint !== "/reset-factory") {
-        this.showToast("Perangkat tidak terhubung", "error");
-        return Promise.reject(new Error("Device not connected"));
+      if (!this.state.isConnected) {
+        this.showToast(
+          "Mode Offline: Perubahan hanya tersimpan di pratinjau",
+          "info"
+        );
+        return Promise.resolve({ ok: true });
       }
       try {
         const response = await fetch(endpoint, {
@@ -228,10 +308,7 @@ class AeriApp {
       ? "Terhubung"
       : "Terputus";
     if (!isConnected) {
-      this.showToast(
-        "Koneksi terputus. Mencoba menyambung kembali...",
-        "error"
-      );
+      this.showToast("Koneksi terputus. Anda dalam mode offline.", "error");
     } else {
       this.showToast("Terhubung ke AERI LIGHT", "success");
     }
@@ -239,6 +316,8 @@ class AeriApp {
 
   renderFullUI() {
     if (!this.state.appState) return;
+    this.elements.masterPowerSwitch.checked =
+      this.state.appState.masterPowerState;
     this.renderSystem("alis");
     this.renderSystem("shroud");
     this.renderSystem("demon");
@@ -258,6 +337,12 @@ class AeriApp {
       this.config && this.config.modes && this.config.modes[system]
         ? this.config.modes[system]
         : [];
+
+    // Tentukan state sisi mana yang akan ditampilkan
+    const sideState =
+      this.state.activeSide === "kanan" && isLightSystem
+        ? state.stateKanan
+        : state.stateKiri;
 
     let html = `
       <div class="control-group">
@@ -280,9 +365,13 @@ class AeriApp {
         <div class="control-group">
             <div class="slider-label-container">
                 <label for="brightness-${system}">Kecerahan</label>
-                <span class="panel-info">${state.stateKiri.kecerahan}</span>
+                <span id="brightness-value-${system}" class="panel-info">${Math.round(
+        (sideState.kecerahan / 255) * 100
+      )}%</span>
             </div>
-            <input type="range" id="brightness-${system}" min="0" max="255" value="${state.stateKiri.kecerahan}">
+            <input type="range" id="brightness-${system}" min="0" max="100" value="${Math.round(
+        (sideState.kecerahan / 255) * 100
+      )}">
         </div>`;
     }
 
@@ -290,7 +379,9 @@ class AeriApp {
       <div class="control-group">
         <div class="slider-label-container">
             <label for="speed-${system}">Kecepatan</label>
-            <span class="panel-info">${state.kecepatan}</span>
+            <span id="speed-value-${system}" class="panel-info">${
+      state.kecepatan
+    }%</span>
         </div>
         <input type="range" id="speed-${system}" min="0" max="100" value="${
       state.kecepatan
@@ -301,7 +392,7 @@ class AeriApp {
         <div class="color-bar-container">
           ${
             isLightSystem
-              ? state.stateKiri.warna
+              ? sideState.warna
                   .map((color, index) => this.renderColorSegment(system, index))
                   .join("")
               : this.renderColorSegment(system, 0)
@@ -317,12 +408,17 @@ class AeriApp {
   renderColorSegment(system, index) {
     const state = this.state.appState[system];
     const isLightSystem = system !== "sein";
-    const color = isLightSystem ? state.stateKiri.warna[index] : state.warna;
+    const sideState =
+      this.state.activeSide === "kanan" && isLightSystem
+        ? state.stateKanan
+        : state.stateKiri;
+    const color = isLightSystem ? sideState.warna[index] : state.warna;
     const rgb = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
     return `<div class="color-segment" style="background-color: ${rgb};" data-system="${system}" data-color-index="${index}"></div>`;
   }
 
   renderSettings() {
+    if (!this.state.appState) return;
     const { ledCounts, welcome } = this.state.appState;
     Object.keys(ledCounts).forEach((key) => {
       if (this.elements.ledCountInputs[key]) {
@@ -346,22 +442,25 @@ class AeriApp {
 
   attachDynamicEventListeners(system) {
     const modeEl = document.getElementById(`mode-${system}`);
-    const speedEl = document.getElementById(`speed-${system}`);
     if (modeEl)
       modeEl.addEventListener("change", (e) =>
-        this.handleControlChange(system, "mode", e.target.value)
+        this.handleControlSave(system, "mode", e.target.value)
       );
-    if (speedEl)
-      speedEl.addEventListener("input", (e) =>
-        this.handleControlChange(system, "kecepatan", e.target.value)
+
+    const speedEl = document.getElementById(`speed-${system}`);
+    if (speedEl) {
+      speedEl.addEventListener("change", (e) =>
+        this.handleControlSave(system, "kecepatan", e.target.value)
       );
+    }
 
     if (system !== "sein") {
       const brightnessEl = document.getElementById(`brightness-${system}`);
-      if (brightnessEl)
-        brightnessEl.addEventListener("input", (e) =>
-          this.handleControlChange(system, "kecerahan", e.target.value)
+      if (brightnessEl) {
+        brightnessEl.addEventListener("change", (e) =>
+          this.handleControlSave(system, "kecerahan", e.target.value)
         );
+      }
     }
 
     this.elements.controlContainers[system]
@@ -373,6 +472,15 @@ class AeriApp {
           this.showColorPicker(system, index);
         });
       });
+  }
+
+  handleMasterPowerChange(e) {
+    const value = e.target.checked;
+    this.state.appState.masterPowerState = value;
+    this.renderFullUI();
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({ type: "master_power", value: value }));
+    }
   }
 
   handleTabClick(e) {
@@ -400,11 +508,19 @@ class AeriApp {
 
   handleSystemChange(e) {
     this.state.activeSystem = e.target.value;
+    this.elements.sideSelector.style.display =
+      this.state.activeSystem === "sein" ? "none" : "flex";
     Object.values(this.elements.controlContainers).forEach(
       (c) => (c.style.display = "none")
     );
     this.elements.controlContainers[this.state.activeSystem].style.display =
       "block";
+    this.renderSystem(this.state.activeSystem); // Re-render untuk sisi yang benar
+  }
+
+  handleSideChange(e) {
+    this.state.activeSide = e.target.value;
+    this.renderSystem(this.state.activeSystem); // Re-render untuk menampilkan state sisi yang baru
   }
 
   handleSyncModeChange(e) {
@@ -431,16 +547,17 @@ class AeriApp {
     });
   }
 
-  async handleControlChange(system, key, value) {
+  handleControlSave(system, key, value) {
     const systemsToUpdate =
       this.state.isSyncMode && ["alis", "shroud", "demon"].includes(system)
         ? ["alis", "shroud", "demon"]
         : [system];
-    const payload = { [key]: parseInt(value) };
+    const payload = { [key]: parseInt(value), target: this.state.activeSide };
+
     this.showSavingIndicator();
     try {
       for (const sys of systemsToUpdate) {
-        await this.api.post(`/set-mode-${sys}`, payload);
+        this.api.post(`/set-mode-${sys}`, payload);
       }
     } catch (error) {
       this.showToast("Gagal menyimpan", "error");
@@ -450,19 +567,22 @@ class AeriApp {
   }
 
   async handleColorPickerSave() {
+    this.hideModal("colorPickerModal");
     const { activeSystemForModal, activeColorSlot } = this.state;
-    if (!activeSystemForModal) return;
     const newColor = this.modalColorPicker.color.rgb;
-    const payload = { r: newColor.r, g: newColor.g, b: newColor.b };
-    if (activeSystemForModal !== "sein") {
-      payload.colorIndex = activeColorSlot;
-    }
+    const payload = {
+      r: newColor.r,
+      g: newColor.g,
+      b: newColor.b,
+      colorIndex: activeColorSlot,
+      target: this.state.activeSide,
+    };
     const systemsToUpdate =
       this.state.isSyncMode &&
       ["alis", "shroud", "demon"].includes(activeSystemForModal)
         ? ["alis", "shroud", "demon"]
         : [activeSystemForModal];
-    this.hideModal("colorPickerModal");
+
     this.showSavingIndicator();
     try {
       for (const sys of systemsToUpdate) {
@@ -473,6 +593,11 @@ class AeriApp {
     } finally {
       this.hideSavingIndicator();
     }
+  }
+
+  handleColorPickerCancel() {
+    this.hideModal("colorPickerModal");
+    // Tidak perlu rollback karena preview tidak lagi mengubah state utama
   }
 
   async handleSaveLedCounts() {
@@ -569,6 +694,7 @@ class AeriApp {
     const slot = e.target.value;
     try {
       const response = await fetch(`/get-preset-name?slot=${slot}`);
+      if (!response.ok) throw new Error("Network response was not ok");
       const data = await response.json();
       this.elements.presetNameInput.value = data.name || "";
       this.elements.presetPreview.innerHTML =
@@ -604,9 +730,13 @@ class AeriApp {
     this.state.activeSystemForModal = system;
     this.state.activeColorSlot = colorIndex;
     const state = this.state.appState[system];
-    const color =
-      system === "sein" ? state.warna : state.stateKiri.warna[colorIndex];
-    this.modalColorPicker.color.rgb = { r: color[0], g: color[1], b: color[2] };
+    const sideState =
+      this.state.activeSide === "kanan" && system !== "sein"
+        ? state.stateKanan
+        : state.stateKiri;
+    const color = system === "sein" ? state.warna : sideState.warna[colorIndex];
+    this.state.originalColor = { r: color[0], g: color[1], b: color[2] };
+    this.modalColorPicker.color.rgb = this.state.originalColor;
     this.showModal("colorPickerModal");
   }
 
@@ -627,8 +757,8 @@ class AeriApp {
   }
 }
 
+// Initialize the app
 document.addEventListener("DOMContentLoaded", () => {
-  // Ganti window.AppConfig dengan window.APP_CONFIG jika nama variabel globalnya seperti itu
-  const app = new AeriApp(window.AppConfig || {});
+  const app = new AeriApp(window.AppConfig);
   app.init();
 });

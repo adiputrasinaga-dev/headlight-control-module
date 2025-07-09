@@ -1,5 +1,5 @@
 // AERI LIGHT Service Worker v3 - API requests are now network-first.
-const CACHE_NAME = "aeri-light-cache-v3"; // Versi cache dinaikkan untuk memicu pembaruan
+const CACHE_NAME = "aeri-light-cache-v4"; // Versi cache dinaikkan untuk memicu pembaruan
 const urlsToCache = [
   "/",
   "/index.html",
