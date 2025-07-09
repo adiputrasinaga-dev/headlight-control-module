@@ -1,18 +1,14 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.0 - FIRMWARE (INDEPENDENT SIDE CONTROL)
+ * AERI LIGHT v24.4 - FIRMWARE (SEIN BRIGHTNESS & UI REFINEMENTS)
  * ===================================================================
  * Deskripsi Perubahan:
- * - FIX: Menghapus logika 'memcpy' yang menyebabkan pengaturan sisi
- * kiri menimpa sisi kanan.
- * - ADD: Logika di dalam loop() sekarang memanggil jalankanModeLampu()
- * secara terpisah untuk sisi kiri dan kanan, menggunakan
- * stateKiri dan stateKanan.
- * - UPDATE: handleSetModeLampu() dan handleWsMessage() sekarang
- * menerima parameter 'target' untuk menerapkan perubahan ke 'kiri',
- * 'kanan', atau 'keduanya'.
- * - UPDATE: Serialisasi dan deserialisasi state sekarang mencakup
- * stateKanan untuk penyimpanan dan pemuatan preset yang benar.
+ * - ADDED: Field 'kecerahan' ditambahkan ke SeinConfig.
+ * - UPDATED: Logika di handleSetModeSein, (de)serialisasi, dan
+ * jalankanModeSein diperbarui untuk mendukung kecerahan sein.
+ * - REFINED: Logika loop utama disempurnakan agar lampu lain tetap
+ * menyala saat sein aktif.
+ * - ADDED: Fungsionalitas penuh untuk Editor Welcome Kustom.
  * ===================================================================
  */
 
@@ -32,6 +28,7 @@
 #include "welcome_effects.h"
 #include "custom_welcome_effects.h"
 #include "sein_effects.h"
+#include "effects/custom_sequence.h"
 
 // --- Konfigurasi ---
 const char *AP_SSID = "AERI_LIGHT";
@@ -39,20 +36,17 @@ const char *AP_PASSWORD = "12345678";
 
 #define PIN_INPUT_SEIN_KIRI 32
 #define PIN_INPUT_SEIN_KANAN 19
-
 #define PIN_ALIS_KIRI 33
 #define PIN_ALIS_KANAN 18
-
 #define PIN_SHROUD_KIRI 25
 #define PIN_SHROUD_KANAN 5
-
 #define PIN_DEMON_KIRI 14
 #define PIN_DEMON_KANAN 4
 
 #define MAX_LEDS 250
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
-const uint8_t CONFIG_VERSION = 24;
+const uint8_t CONFIG_VERSION = 25; // Versi dinaikkan untuk reset otomatis karena perubahan struct
 
 // === State Management Structs ===
 struct LightState
@@ -66,12 +60,13 @@ struct LightConfig
   LightState stateKanan;
   uint8_t mode = 0;
   uint8_t kecepatan = 50;
-}; // Ditambahkan stateKanan
+};
 struct SeinConfig
 {
   uint8_t mode = 0;
   CRGB warna = CRGB::Orange;
   uint8_t kecepatan = 50;
+  uint8_t kecerahan = 255; // Default kecerahan penuh
 };
 struct LedCountConfig
 {
@@ -110,9 +105,13 @@ typedef void (*EffectFunction)(EffectParams &);
 EffectFunction effectRegistry[] = {solid, breathing, rainbow, comet, cylonScanner, twinkle, fire, gradientShift, plasmaBall, theaterChase, colorWipe, pride, pacifica, bouncingBalls, meteor, confetti, juggle, sinelon, noise, matrix, ripple, larsonScanner, twoColorWipe, lightning};
 const char *effectNames[] = {"Solid", "Breathing", "Rainbow", "Comet", "Cylon Scanner", "Twinkle", "Fire", "Gradient Shift", "Plasma Ball", "Theater Chase", "Color Wipe", "Pride", "Pacifica", "Bouncing Balls", "Meteor", "Confetti", "Juggle", "Sinelon", "Noise", "Matrix", "Ripple", "Larson Scanner", "Two-Color Wipe", "Lightning"};
 const uint8_t numEffects = sizeof(effectRegistry) / sizeof(effectRegistry[0]);
+
+void runCustomWelcome(WelcomeEffectParams &params);
+
 typedef void (*WelcomeEffectFunction)(WelcomeEffectParams &);
-WelcomeEffectFunction welcomeEffectRegistry[] = {WelcomeEffects::powerOnScan, WelcomeEffects::ignitionBurst, WelcomeEffects::spectrumResolve, WelcomeEffects::theaterChaseWelcome, WelcomeEffects::dualCometWelcome, WelcomeEffects::centerFill, CustomWelcomeEffects::charging, CustomWelcomeEffects::glitch, CustomWelcomeEffects::sonar, CustomWelcomeEffects::burning, CustomWelcomeEffects::warpSpeed, CustomWelcomeEffects::dna, CustomWelcomeEffects::laser, CustomWelcomeEffects::heartbeat, CustomWelcomeEffects::liquid, CustomWelcomeEffects::spotlights};
+WelcomeEffectFunction welcomeEffectRegistry[] = {WelcomeEffects::powerOnScan, WelcomeEffects::ignitionBurst, WelcomeEffects::spectrumResolve, WelcomeEffects::theaterChaseWelcome, WelcomeEffects::dualCometWelcome, WelcomeEffects::centerFill, CustomWelcomeEffects::charging, CustomWelcomeEffects::glitch, CustomWelcomeEffects::sonar, CustomWelcomeEffects::burning, CustomWelcomeEffects::warpSpeed, CustomWelcomeEffects::dna, CustomWelcomeEffects::laser, CustomWelcomeEffects::heartbeat, CustomWelcomeEffects::liquid, CustomWelcomeEffects::spotlights, runCustomWelcome};
 const uint8_t numWelcomeEffects = sizeof(welcomeEffectRegistry) / sizeof(welcomeEffectRegistry[0]);
+
 typedef void (*SeinEffectFunction)(SeinEffectParams &);
 SeinEffectFunction seinEffectRegistry[] = {SeinEffects::sequential, SeinEffects::pulsingArrow, SeinEffects::fillAndFlush, SeinEffects::cometTrail};
 const uint8_t numSeinEffects = sizeof(seinEffectRegistry) / sizeof(seinEffectRegistry[0]);
@@ -140,7 +139,9 @@ void handleGetPresetName(AsyncWebServerRequest *request);
 void handleSavePreset(AsyncWebServerRequest *request, JsonVariant &json);
 void handleLoadPreset(AsyncWebServerRequest *request, JsonVariant &json);
 void handleResetFactory(AsyncWebServerRequest *request);
-void initializePresets();
+void initializeFileSystem();
+void handleGetCustomWelcome(AsyncWebServerRequest *request);
+void handleSaveCustomWelcome(AsyncWebServerRequest *request, uint8_t *data, size_t len);
 
 void setup()
 {
@@ -151,7 +152,7 @@ void setup()
     return;
   }
 
-  initializePresets();
+  initializeFileSystem();
   bacaPengaturan();
 
   FastLED.addLeds<LED_TYPE, PIN_ALIS_KIRI, COLOR_ORDER>(ledsAlisKiri, MAX_LEDS);
@@ -170,8 +171,6 @@ void setup()
   Serial.println(WiFi.softAPIP());
 
   ws.onEvent(onWsEvent);
-  // Heartbeat: send PING every 5s, close if no PONG after 7s (2 tries)
-  //  ws.enableHeartbeat(5000, 7000, 2); // Not available in AsyncWebSocket
   server.addHandler(&ws);
 
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
@@ -207,6 +206,15 @@ void setup()
   server.on("/get-preset-name", HTTP_GET, handleGetPresetName);
   server.on("/reset-factory", HTTP_POST, handleResetFactory);
 
+  server.on("/get-custom-welcome", HTTP_GET, handleGetCustomWelcome);
+  server.on(
+      "/save-custom-welcome", HTTP_POST,
+      [](AsyncWebServerRequest *request)
+      { request->send(200, "text/plain", "OK"); },
+      NULL,
+      [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+      { handleSaveCustomWelcome(request, data, len); });
+
   server.onNotFound([](AsyncWebServerRequest *request)
                     { request->send(404, "text/plain", "Not found"); });
 
@@ -234,6 +242,12 @@ void loop()
       stateChanged = true;
     }
     lastSeinState = true;
+
+    // Tetap jalankan lampu lain, sein akan menimpa strip alis
+    jalankanModeLampu(shroudConfig, shroudConfig.stateKiri, ledsShroudKiri, ledCounts.shroud);
+    jalankanModeLampu(shroudConfig, shroudConfig.stateKanan, ledsShroudKanan, ledCounts.shroud);
+    jalankanModeLampu(demonConfig, demonConfig.stateKiri, ledsDemonKiri, ledCounts.demon);
+    jalankanModeLampu(demonConfig, demonConfig.stateKanan, ledsDemonKanan, ledCounts.demon);
     jalankanModeSein(seinKiriNyala, seinKananNyala);
   }
   else
@@ -243,6 +257,7 @@ void loop()
       stateChanged = true;
     }
     lastSeinState = false;
+
     if (!masterPowerState)
     {
       FastLED.clear();
@@ -350,6 +365,7 @@ void serializeState(JsonDocument &doc)
   JsonObject sein = state["sein"].to<JsonObject>();
   sein["mode"] = seinConfig.mode;
   sein["kecepatan"] = seinConfig.kecepatan;
+  sein["kecerahan"] = seinConfig.kecerahan;
   JsonArray seinWarna = sein["warna"].to<JsonArray>();
   seinWarna.add(seinConfig.warna.r);
   seinWarna.add(seinConfig.warna.g);
@@ -413,6 +429,7 @@ void deserializeState(JsonObject &stateObj)
   {
     seinConfig.mode = seinObj["mode"] | seinConfig.mode;
     seinConfig.kecepatan = seinObj["kecepatan"] | seinConfig.kecepatan;
+    seinConfig.kecerahan = seinObj["kecerahan"] | seinConfig.kecerahan;
     JsonArray seinWarna = seinObj["warna"];
     if (!seinWarna.isNull())
     {
@@ -533,6 +550,12 @@ void handleSetModeSein(AsyncWebServerRequest *request, JsonVariant &json)
     seinConfig.kecepatan = obj["kecepatan"];
     needsSave = true;
   }
+  if (!obj["kecerahan"].isNull())
+  {
+    int brightness_percent = obj["kecerahan"];
+    seinConfig.kecerahan = map(brightness_percent, 0, 100, 0, 255);
+    needsSave = true;
+  }
   if (!obj["r"].isNull() && !obj["g"].isNull() && !obj["b"].isNull())
   {
     seinConfig.warna = CRGB(obj["r"], obj["g"], obj["b"]);
@@ -584,11 +607,9 @@ void handleLoadPreset(AsyncWebServerRequest *request, JsonVariant &json)
     request->send(500, "text/plain", "Gagal buka file preset");
     return;
   }
-
   JsonDocument doc;
   deserializeJson(doc, file);
   file.close();
-
   JsonArray presets = doc.as<JsonArray>();
   for (JsonObject p : presets)
   {
@@ -614,18 +635,15 @@ void handleSavePreset(AsyncWebServerRequest *request, JsonVariant &json)
 {
   int slot = json["slot"];
   String name = json["name"];
-
   File file = LittleFS.open("/presets.json", "r");
   if (!file)
   {
     request->send(500, "text/plain", "Gagal buka file preset");
     return;
   }
-
   JsonDocument doc;
   deserializeJson(doc, file);
   file.close();
-
   JsonArray presets = doc.as<JsonArray>();
   bool found = false;
   for (JsonObject p : presets)
@@ -640,13 +658,11 @@ void handleSavePreset(AsyncWebServerRequest *request, JsonVariant &json)
       break;
     }
   }
-
   if (!found)
   {
     request->send(404, "text/plain", "Slot tidak ditemukan");
     return;
   }
-
   file = LittleFS.open("/presets.json", "w");
   if (serializeJson(doc, file) == 0)
   {
@@ -673,11 +689,9 @@ void handleGetPresetName(AsyncWebServerRequest *request)
     request->send(500, "text/plain", "Preset file not found");
     return;
   }
-
   JsonDocument doc;
   deserializeJson(doc, file);
   file.close();
-
   JsonArray presets = doc.as<JsonArray>();
   for (JsonObject p : presets)
   {
@@ -710,11 +724,38 @@ void handleResetFactory(AsyncWebServerRequest *request)
   ESP.restart();
 }
 
+void handleGetCustomWelcome(AsyncWebServerRequest *request)
+{
+  if (LittleFS.exists("/custom_welcome.json"))
+  {
+    request->send(LittleFS, "/custom_welcome.json", "application/json");
+  }
+  else
+  {
+    request->send(200, "application/json", "[]");
+  }
+}
+
+void handleSaveCustomWelcome(AsyncWebServerRequest *request, uint8_t *data, size_t len)
+{
+  File file = LittleFS.open("/custom_welcome.json", "w");
+  if (!file)
+  {
+    Serial.println("Gagal membuka custom_welcome.json untuk ditulis");
+    return;
+  }
+  file.write(data, len);
+  file.close();
+  Serial.println("Sekuens welcome kustom berhasil disimpan.");
+}
+
 void jalankanModeLampu(LightConfig &config, LightState &sideState, CRGB *leds, uint8_t ledCount)
 {
-  fill_solid(leds, MAX_LEDS, CRGB::Black);
   if (ledCount == 0 || config.mode >= numEffects)
+  {
+    fill_solid(leds, ledCount > 0 ? ledCount : MAX_LEDS, CRGB::Black);
     return;
+  }
 
   uint8_t originalBrightness = FastLED.getBrightness();
   FastLED.setBrightness(sideState.kecerahan);
@@ -728,42 +769,188 @@ void jalankanModeLampu(LightConfig &config, LightState &sideState, CRGB *leds, u
 
 void jalankanModeSein(bool isKiriActive, bool isKananActive)
 {
-  FastLED.clear();
+  uint8_t originalBrightness = FastLED.getBrightness();
+  FastLED.setBrightness(seinConfig.kecerahan);
+
   if (isKiriActive && seinConfig.mode < numSeinEffects)
   {
     SeinEffectParams params = {ledsAlisKiri, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna};
     seinEffectRegistry[seinConfig.mode](params);
   }
+  else
+  {
+    fill_solid(ledsAlisKiri, ledCounts.alis, CRGB::Black); // Clear if not active
+  }
+
   if (isKananActive && seinConfig.mode < numSeinEffects)
   {
     SeinEffectParams params = {ledsAlisKanan, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna};
     seinEffectRegistry[seinConfig.mode](params);
   }
+  else
+  {
+    fill_solid(ledsAlisKanan, ledCounts.alis, CRGB::Black); // Clear if not active
+  }
+
+  FastLED.setBrightness(originalBrightness);
 }
 
 void jalankanModeWelcome()
 {
   if (welcomeStartTime == 0)
     welcomeStartTime = millis();
+
   uint32_t elapsed = millis() - welcomeStartTime;
   uint32_t duration = welcomeConfig.durasi * 1000;
-  if (elapsed > duration)
+
+  if (elapsed > duration && welcomeConfig.mode != (numWelcomeEffects - 1))
   {
     isWelcomeActive = false;
     welcomeStartTime = 0;
     return;
   }
-  fill_solid(ledsAlisKiri, ledCounts.alis, CRGB::Black);
-  if (welcomeConfig.mode < numWelcomeEffects)
+
+  if (welcomeConfig.mode >= numWelcomeEffects)
+    return;
+
+  WelcomeEffectParams params = {nullptr, 0, elapsed, duration, alisConfig.stateKiri.warna[0], alisConfig.stateKiri.warna[1], alisConfig.stateKiri.warna[2]};
+  welcomeEffectRegistry[welcomeConfig.mode](params);
+}
+
+void runCustomWelcome(WelcomeEffectParams &params)
+{
+  static CustomEffectStep sequence[MAX_CUSTOM_WELCOME_STEPS];
+  static int numSteps = 0;
+  static int currentStep = -1;
+  static unsigned long stepStartTime = 0;
+
+  if (currentStep == -1)
   {
-    WelcomeEffectParams params = {ledsAlisKiri, (uint16_t)ledCounts.alis, elapsed, duration, alisConfig.stateKiri.warna[0], alisConfig.stateKiri.warna[1], alisConfig.stateKiri.warna[2]};
-    welcomeEffectRegistry[welcomeConfig.mode](params);
+    File file = LittleFS.open("/custom_welcome.json", "r");
+    if (file)
+    {
+      JsonDocument doc;
+      DeserializationError error = deserializeJson(doc, file);
+      if (!error)
+      {
+        JsonArray arr = doc.as<JsonArray>();
+        numSteps = arr.size() > MAX_CUSTOM_WELCOME_STEPS ? MAX_CUSTOM_WELCOME_STEPS : arr.size();
+        for (int i = 0; i < numSteps; i++)
+        {
+          JsonObject obj = arr[i];
+          sequence[i].targetSystem = obj["targetSystem"];
+          sequence[i].side = obj["side"];
+          sequence[i].effectMode = obj["effectMode"];
+          sequence[i].duration = obj["duration"];
+          JsonArray colors = obj["colors"];
+          for (int j = 0; j < 3; j++)
+          {
+            if (j < colors.size())
+            {
+              sequence[i].colors[j] = CRGB(colors[j][0], colors[j][1], colors[j][2]);
+            }
+            else
+            {
+              sequence[i].colors[j] = CRGB::Black;
+            }
+          }
+        }
+      }
+      file.close();
+    }
+    else
+    {
+      numSteps = 0;
+    }
+
+    if (numSteps > 0)
+    {
+      currentStep = 0;
+      stepStartTime = millis();
+      FastLED.clear();
+    }
+    else
+    {
+      isWelcomeActive = false;
+      return;
+    }
+  }
+
+  if (currentStep >= numSteps)
+  {
+    isWelcomeActive = false;
+    currentStep = -1;
+    return;
+  }
+
+  if (millis() - stepStartTime > sequence[currentStep].duration)
+  {
+    stepStartTime = millis();
+    currentStep++;
+    if (currentStep >= numSteps)
+    {
+      isWelcomeActive = false;
+      currentStep = -1;
+      return;
+    }
+  }
+
+  CustomEffectStep &step = sequence[currentStep];
+  if (step.effectMode >= numEffects)
+    return;
+
+  CRGB *ledArrays[2] = {nullptr, nullptr};
+  uint16_t ledCountsArr[2] = {0, 0};
+
+  switch (step.targetSystem)
+  {
+  case 0:
+    ledArrays[0] = ledsAlisKiri;
+    ledArrays[1] = ledsAlisKanan;
+    ledCountsArr[0] = ledCounts.alis;
+    ledCountsArr[1] = ledCounts.alis;
+    break;
+  case 1:
+    ledArrays[0] = ledsShroudKiri;
+    ledArrays[1] = ledsShroudKanan;
+    ledCountsArr[0] = ledCounts.shroud;
+    ledCountsArr[1] = ledCounts.shroud;
+    break;
+  case 2:
+    ledArrays[0] = ledsDemonKiri;
+    ledArrays[1] = ledsDemonKanan;
+    ledCountsArr[0] = ledCounts.demon;
+    ledCountsArr[1] = ledCounts.demon;
+    break;
+  }
+
+  auto apply = [&](CRGB *leds, uint16_t count)
+  {
+    if (count > 0)
+    {
+      EffectParams effectParams = {leds, count, (uint16_t)(millis() - stepStartTime), 10, step.colors[0], step.colors[1], step.colors[2]};
+      effectRegistry[step.effectMode](effectParams);
+    }
+  };
+
+  if (step.side == 0)
+  {
+    apply(ledArrays[0], ledCountsArr[0]);
+    apply(ledArrays[1], ledCountsArr[1]);
+  }
+  else if (step.side == 1)
+  {
+    apply(ledArrays[0], ledCountsArr[0]);
+  }
+  else if (step.side == 2)
+  {
+    apply(ledArrays[1], ledCountsArr[1]);
   }
 }
 
 void simpanPengaturan()
 {
-  prefs.begin("config-v24", false);
+  prefs.begin("config-v25", false);
   prefs.putUChar("version", CONFIG_VERSION);
   prefs.putBytes("alis", &alisConfig, sizeof(LightConfig));
   prefs.putBytes("shroud", &shroudConfig, sizeof(LightConfig));
@@ -778,7 +965,7 @@ void simpanPengaturan()
 
 void bacaPengaturan()
 {
-  prefs.begin("config-v24", true);
+  prefs.begin("config-v25", true);
   if (prefs.getUChar("version", 0) != CONFIG_VERSION)
   {
     prefs.end();
@@ -806,28 +993,45 @@ void resetToDefaults()
   masterPowerState = true;
   isWelcomeActive = true;
   simpanPengaturan();
+
+  if (LittleFS.exists("/custom_welcome.json"))
+  {
+    LittleFS.remove("/custom_welcome.json");
+  }
+
   Serial.println("State dikembalikan ke default.");
 }
 
-void initializePresets()
+void initializeFileSystem()
 {
-  if (LittleFS.exists("/presets.json"))
-    return;
-  File file = LittleFS.open("/presets.json", "w");
-  if (!file)
+  if (!LittleFS.exists("/presets.json"))
   {
-    Serial.println("Gagal membuat file preset");
-    return;
+    File file = LittleFS.open("/presets.json", "w");
+    if (!file)
+    {
+      Serial.println("Gagal membuat file preset");
+      return;
+    }
+    JsonDocument doc;
+    JsonArray presets = doc.to<JsonArray>();
+    for (int i = 1; i <= 5; i++)
+    {
+      JsonObject p = presets.add<JsonObject>();
+      p["slot"] = i;
+      p["name"] = "Preset " + String(i);
+      p["state"] = nullptr;
+    }
+    serializeJson(doc, file);
+    file.close();
   }
-  JsonDocument doc;
-  JsonArray presets = doc.to<JsonArray>();
-  for (int i = 1; i <= 5; i++)
+
+  if (!LittleFS.exists("/custom_welcome.json"))
   {
-    JsonObject p = presets.add<JsonObject>();
-    p["slot"] = i;
-    p["name"] = "Preset " + String(i);
-    p["state"] = nullptr;
+    File file = LittleFS.open("/custom_welcome.json", "w");
+    if (file)
+    {
+      file.print("[]");
+      file.close();
+    }
   }
-  serializeJson(doc, file);
-  file.close();
 }

@@ -45,6 +45,8 @@ const AppConfig = {
     { name: "Heartbeat", value: 13 },
     { name: "Liquid", value: 14 },
     { name: "Spotlights", value: 15 },
+    // BARU: Menambahkan Efek Kustom di akhir
+    { name: "Efek Kustom", value: 16 },
   ],
 
   seinModes: [

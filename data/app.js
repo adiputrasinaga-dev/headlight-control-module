@@ -1,14 +1,12 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.0 - MAIN APP LOGIC (INDEPENDENT SIDE CONTROL)
+ * AERI LIGHT v24.4 - MAIN APP LOGIC (UI & SEIN BRIGHTNESS REFINEMENT)
  * ===================================================================
  * Deskripsi Perubahan:
- * - ADD: Opsi target 'kiri', 'kanan', dan 'keduanya' untuk
- * kontrol lampu yang terisolasi atau simultan.
- * - UPDATE: Logika rendering dan pengiriman perintah disesuaikan
- * untuk menangani target sisi yang aktif.
- * - ADD: Mekanisme "Heartbeat" untuk deteksi koneksi yang andal.
- * - ADD: Mode Offline dengan data dummy saat aplikasi pertama dimuat.
+ * - ADDED: Kontrol kecerahan ditambahkan untuk Lampu Sein.
+ * - REFINED: Logika rendering disesuaikan untuk menampilkan slider
+ * kecerahan pada panel pengaturan Sein.
+ * - REFINED: Logika pengiriman data disederhanakan untuk event 'change'.
  * ===================================================================
  */
 
@@ -18,12 +16,14 @@ class AeriApp {
       isConnected: false,
       activeTab: "Kontrol",
       activeSystem: "alis",
-      activeSide: "keduanya", // 'kiri', 'kanan', atau 'keduanya'
+      activeSide: "keduanya",
       isSyncMode: false,
       activeSystemForModal: null,
       activeColorSlot: 0,
       originalColor: null,
       appState: null,
+      customWelcomeSequence: [],
+      activeEditorContext: { system: null, index: -1 },
     };
     this.elements = {};
     this.modalColorPicker = null;
@@ -39,12 +39,6 @@ class AeriApp {
       sein: (this.config.seinModes || []).map((m) => m.name),
       welcome: (this.config.welcomeModes || []).map((m) => m.name),
     };
-
-    this.throttledSendColorPreview = this.throttle(this.sendColorPreview, 100);
-    this.throttledSendControlPreview = this.throttle(
-      this.sendControlPreview,
-      100
-    );
   }
 
   generateDefaultState() {
@@ -67,30 +61,20 @@ class AeriApp {
       alis: { ...defaultLightState },
       shroud: { ...defaultLightState },
       demon: { ...defaultLightState },
-      sein: { mode: 0, kecepatan: 50, warna: [255, 100, 0] },
+      sein: { mode: 0, kecepatan: 50, warna: [255, 100, 0], kecerahan: 255 },
       ledCounts: { alis: 30, shroud: 30, demon: 1, sein: 30 },
       welcome: { mode: 0, durasi: 5 },
     };
   }
 
-  throttle(func, limit) {
-    let inThrottle;
-    return (...args) => {
-      if (!inThrottle) {
-        func.apply(this, args);
-        inThrottle = true;
-        setTimeout(() => (inThrottle = false), limit);
-      }
-    };
-  }
-
-  init() {
+  async init() {
     this.state.appState = this.generateDefaultState();
     this.cacheInitialElements();
     this.attachEventListeners();
     this.initColorPicker();
     this.renderFullUI();
     this.connectWebSocket();
+    await this.loadCustomWelcomeSequence();
   }
 
   connectWebSocket() {
@@ -109,7 +93,6 @@ class AeriApp {
 
     this.socket.onerror = (e) => {
       console.error("WS error", e);
-      // ensure close triggers onclose
       this.socket.close();
     };
 
@@ -189,6 +172,26 @@ class AeriApp {
       btnPreviewWelcome: document.getElementById("btnPreviewWelcome"),
       btnSaveWelcome: document.getElementById("btnSaveWelcome"),
       btnReset: document.getElementById("btnReset"),
+      tabEditorWelcome: document.getElementById("tabEditorWelcome"),
+      welcomeEditorContainer: document.getElementById(
+        "welcome-editor-container"
+      ),
+      btnSaveCustomWelcome: document.getElementById("btnSaveCustomWelcome"),
+      btnPreviewCustomWelcome: document.getElementById(
+        "btnPreviewCustomWelcome"
+      ),
+      effectStepModal: {
+        backdrop: document.getElementById("effect-step-modal"),
+        effectSelect: document.getElementById("modalEffectSelect"),
+        sideSelect: document.getElementById("modalSideSelect"),
+        colorSlotsContainer: document.getElementById(
+          "modal-color-slots-container"
+        ),
+        durationInput: document.getElementById("modalDurationInput"),
+        saveBtn: document.getElementById("btnSaveStep"),
+        cancelBtn: document.getElementById("btnCancelStep"),
+        deleteBtn: document.getElementById("btnDeleteStep"),
+      },
     };
   }
 
@@ -250,6 +253,28 @@ class AeriApp {
     this.elements.btnReset.addEventListener("click", () =>
       this.showModal("resetModal")
     );
+
+    this.elements.welcomeEditorContainer.addEventListener("click", (e) =>
+      this.handleSlotClick(e)
+    );
+    this.elements.effectStepModal.saveBtn.addEventListener("click", () =>
+      this.handleEffectStepSave()
+    );
+    this.elements.effectStepModal.cancelBtn.addEventListener("click", () =>
+      this.hideModal("effectStepModal")
+    );
+    this.elements.effectStepModal.deleteBtn.addEventListener("click", () =>
+      this.handleEffectStepDelete()
+    );
+    this.elements.effectStepModal.effectSelect.addEventListener("change", (e) =>
+      this.renderModalColorSlots(parseInt(e.target.value))
+    );
+    this.elements.btnSaveCustomWelcome.addEventListener("click", () =>
+      this.saveCustomWelcomeSequence()
+    );
+    this.elements.btnPreviewCustomWelcome.addEventListener("click", () =>
+      this.handlePreviewWelcome()
+    );
   }
 
   initColorPicker() {
@@ -267,24 +292,29 @@ class AeriApp {
       }
     );
     this.modalColorPicker.on("color:change", (color) => {
-      this.throttledSendColorPreview(color.rgb);
+      // This listener is now generic and doesn't send data directly.
+      // The save button will handle the logic.
     });
   }
 
   createApiHandler() {
-    const post = async (endpoint, body) => {
-      if (!this.state.isConnected) {
+    const post = async (endpoint, body, isJson = true) => {
+      // Offline check is now more for preventing network errors than blocking UI
+      if (!this.state.isConnected && endpoint !== "/preview-welcome") {
         this.showToast(
-          "Mode Offline: Perubahan hanya tersimpan di pratinjau",
+          "Mode Offline: Perubahan akan disimpan saat terhubung kembali",
           "info"
         );
-        return Promise.resolve({ ok: true });
+        // In a more advanced app, you'd queue this request. For now, we just inform.
+        return Promise.resolve({ ok: true, offline: true });
       }
       try {
+        const headers = isJson ? { "Content-Type": "application/json" } : {};
+        const bodyToSend = isJson ? JSON.stringify(body) : body;
         const response = await fetch(endpoint, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          headers: headers,
+          body: bodyToSend,
         });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -292,6 +322,7 @@ class AeriApp {
         return response;
       } catch (error) {
         console.error(`API POST to ${endpoint} failed:`, error);
+        this.setConnectionStatus(false); // Assume connection lost on network error
         throw error;
       }
     };
@@ -311,6 +342,8 @@ class AeriApp {
       this.showToast("Koneksi terputus. Anda dalam mode offline.", "error");
     } else {
       this.showToast("Terhubung ke AERI LIGHT", "success");
+      // On re-connection, you might want to re-sync state
+      // For now, the next action will trigger a state update from the device
     }
   }
 
@@ -318,13 +351,15 @@ class AeriApp {
     if (!this.state.appState) return;
     this.elements.masterPowerSwitch.checked =
       this.state.appState.masterPowerState;
+    // Render sistem di tab Kontrol
     this.renderSystem("alis");
     this.renderSystem("shroud");
     this.renderSystem("demon");
-    this.renderSystem("sein");
+    // Render pengaturan
     this.renderSettings();
     this.updateSyncPanelHighlight();
     this.populatePresetSlots();
+    this.renderWelcomeEditor();
   }
 
   renderSystem(system) {
@@ -333,14 +368,10 @@ class AeriApp {
 
     const state = this.state.appState[system];
     const isLightSystem = system !== "sein";
-    const configModes =
-      this.config && this.config.modes && this.config.modes[system]
-        ? this.config.modes[system]
-        : [];
+    const configModes = this.config.modes[system] || [];
 
-    // Tentukan state sisi mana yang akan ditampilkan
     const sideState =
-      this.state.activeSide === "kanan" && isLightSystem
+      isLightSystem && this.state.activeSide === "kanan"
         ? state.stateKanan
         : state.stateKiri;
 
@@ -360,46 +391,47 @@ class AeriApp {
       </div>
       <div class="effect-details-wrapper">`;
 
-    if (isLightSystem) {
+    if (isLightSystem || system === "sein") {
+      const currentBrightness =
+        system === "sein" ? state.kecerahan : sideState.kecerahan;
+      const brightnessPercent = Math.round((currentBrightness / 255) * 100);
       html += `
-        <div class="control-group">
-            <div class="slider-label-container">
+            <div class="control-group">
+              <div class="slider-label-container">
                 <label for="brightness-${system}">Kecerahan</label>
-                <span id="brightness-value-${system}" class="panel-info">${Math.round(
-        (sideState.kecerahan / 255) * 100
-      )}%</span>
-            </div>
-            <input type="range" id="brightness-${system}" min="0" max="100" value="${Math.round(
-        (sideState.kecerahan / 255) * 100
-      )}">
-        </div>`;
+                <span id="brightness-value-${system}" class="panel-info">${brightnessPercent}%</span>
+              </div>
+              <input type="range" id="brightness-${system}" min="0" max="100" value="${brightnessPercent}">
+            </div>`;
     }
 
     html += `
-      <div class="control-group">
-        <div class="slider-label-container">
+        <div class="control-group">
+          <div class="slider-label-container">
             <label for="speed-${system}">Kecepatan</label>
             <span id="speed-value-${system}" class="panel-info">${
       state.kecepatan
     }%</span>
-        </div>
-        <input type="range" id="speed-${system}" min="0" max="100" value="${
+          </div>
+          <input type="range" id="speed-${system}" min="0" max="100" value="${
       state.kecepatan
     }">
-      </div>
-      <div class="control-group">
-        <label>Warna</label>
-        <div class="color-bar-container">
-          ${
-            isLightSystem
-              ? sideState.warna
-                  .map((color, index) => this.renderColorSegment(system, index))
-                  .join("")
-              : this.renderColorSegment(system, 0)
-          }
         </div>
-      </div>
-    </div>`;
+        <div class="control-group">
+          <label>Warna</label>
+          <div class="color-bar-container">
+            ${
+              isLightSystem
+                ? sideState.warna
+                    .map((color, index) =>
+                      this.renderColorSegment(system, index)
+                    )
+                    .join("")
+                : this.renderColorSegment(system, 0)
+            }
+          </div>
+        </div>
+      </div>`;
 
     container.innerHTML = html;
     this.attachDynamicEventListeners(system);
@@ -409,7 +441,7 @@ class AeriApp {
     const state = this.state.appState[system];
     const isLightSystem = system !== "sein";
     const sideState =
-      this.state.activeSide === "kanan" && isLightSystem
+      isLightSystem && this.state.activeSide === "kanan"
         ? state.stateKanan
         : state.stateKiri;
     const color = isLightSystem ? sideState.warna[index] : state.warna;
@@ -425,10 +457,7 @@ class AeriApp {
         this.elements.ledCountInputs[key].value = ledCounts[key];
       }
     });
-    const welcomeModes =
-      this.config && this.config.modes && this.config.modes.welcome
-        ? this.config.modes.welcome
-        : [];
+    const welcomeModes = this.config.modes.welcome || [];
     this.elements.welcomeModeSelect.innerHTML = welcomeModes
       .map(
         (mode, index) =>
@@ -438,46 +467,52 @@ class AeriApp {
       )
       .join("");
     this.elements.welcomeDurationInput.value = welcome.durasi;
+
+    this.renderSystem("sein");
   }
 
   attachDynamicEventListeners(system) {
-    const modeEl = document.getElementById(`mode-${system}`);
+    const container = this.elements.controlContainers[system];
+    if (!container) return;
+
+    const modeEl = container.querySelector(`#mode-${system}`);
     if (modeEl)
       modeEl.addEventListener("change", (e) =>
         this.handleControlSave(system, "mode", e.target.value)
       );
 
-    const speedEl = document.getElementById(`speed-${system}`);
+    const speedEl = container.querySelector(`#speed-${system}`);
     if (speedEl) {
+      speedEl.addEventListener("input", (e) =>
+        this.handleControlPreview(system, "kecepatan", e.target.value)
+      );
       speedEl.addEventListener("change", (e) =>
         this.handleControlSave(system, "kecepatan", e.target.value)
       );
     }
 
-    if (system !== "sein") {
-      const brightnessEl = document.getElementById(`brightness-${system}`);
-      if (brightnessEl) {
-        brightnessEl.addEventListener("change", (e) =>
-          this.handleControlSave(system, "kecerahan", e.target.value)
-        );
-      }
+    const brightnessEl = container.querySelector(`#brightness-${system}`);
+    if (brightnessEl) {
+      brightnessEl.addEventListener("input", (e) =>
+        this.handleControlPreview(system, "kecerahan", e.target.value)
+      );
+      brightnessEl.addEventListener("change", (e) =>
+        this.handleControlSave(system, "kecerahan", e.target.value)
+      );
     }
 
-    this.elements.controlContainers[system]
-      .querySelectorAll(".color-segment")
-      .forEach((el) => {
-        el.addEventListener("click", (e) => {
-          const system = e.target.dataset.system;
-          const index = parseInt(e.target.dataset.colorIndex);
-          this.showColorPicker(system, index);
-        });
+    container.querySelectorAll(".color-segment").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        const system = e.target.dataset.system;
+        const index = parseInt(e.target.dataset.colorIndex);
+        this.showColorPicker(system, index);
       });
+    });
   }
 
   handleMasterPowerChange(e) {
     const value = e.target.checked;
     this.state.appState.masterPowerState = value;
-    this.renderFullUI();
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({ type: "master_power", value: value }));
     }
@@ -497,6 +532,11 @@ class AeriApp {
       .querySelectorAll(".tab-content")
       .forEach((content) => (content.style.display = "none"));
     document.getElementById(`tab${tabName}`).style.display = "block";
+
+    if (tabName === "EditorWelcome") {
+      this.renderWelcomeEditor();
+    }
+
     if (this.elements.mobileMenu.classList.contains("open")) {
       this.toggleMobileMenu();
     }
@@ -508,19 +548,20 @@ class AeriApp {
 
   handleSystemChange(e) {
     this.state.activeSystem = e.target.value;
-    this.elements.sideSelector.style.display =
-      this.state.activeSystem === "sein" ? "none" : "flex";
-    Object.values(this.elements.controlContainers).forEach(
-      (c) => (c.style.display = "none")
-    );
-    this.elements.controlContainers[this.state.activeSystem].style.display =
-      "block";
-    this.renderSystem(this.state.activeSystem); // Re-render untuk sisi yang benar
+    Object.values(this.elements.controlContainers).forEach((container) => {
+      if (container.id.includes(this.state.activeSystem)) {
+        container.style.display = "block";
+      } else if (!container.id.includes("sein-controls-container")) {
+        container.style.display = "none";
+      }
+    });
+    this.updateSyncPanelHighlight();
+    this.renderSystem(this.state.activeSystem);
   }
 
   handleSideChange(e) {
     this.state.activeSide = e.target.value;
-    this.renderSystem(this.state.activeSystem); // Re-render untuk menampilkan state sisi yang baru
+    this.renderSystem(this.state.activeSystem);
   }
 
   handleSyncModeChange(e) {
@@ -547,36 +588,62 @@ class AeriApp {
     });
   }
 
+  handleControlPreview(system, key, value) {
+    // Update UI immediately for better feedback
+    const valueEl = document.getElementById(`${key}-value-${system}`);
+    if (valueEl) {
+      valueEl.textContent = `${value}%`;
+    }
+  }
+
   handleControlSave(system, key, value) {
     const systemsToUpdate =
       this.state.isSyncMode && ["alis", "shroud", "demon"].includes(system)
         ? ["alis", "shroud", "demon"]
         : [system];
-    const payload = { [key]: parseInt(value), target: this.state.activeSide };
+
+    let payload = {};
+    if (system === "sein") {
+      payload = { [key]: parseInt(value) };
+    } else {
+      payload = { [key]: parseInt(value), target: this.state.activeSide };
+    }
 
     this.showSavingIndicator();
-    try {
-      for (const sys of systemsToUpdate) {
-        this.api.post(`/set-mode-${sys}`, payload);
-      }
-    } catch (error) {
-      this.showToast("Gagal menyimpan", "error");
-    } finally {
-      this.hideSavingIndicator();
-    }
+    this.api
+      .post(`/set-mode-${system}`, payload)
+      .catch((err) => this.showToast("Gagal menyimpan", "error"))
+      .finally(() => this.hideSavingIndicator());
   }
 
   async handleColorPickerSave() {
+    if (this.state.activeSystemForModal === "editor") {
+      const targetElement = this.state.activeColorSlot;
+      const newColor = this.modalColorPicker.color.rgb;
+      const colorArray = [newColor.r, newColor.g, newColor.b];
+      targetElement.style.backgroundColor = `rgb(${colorArray.join(",")})`;
+      targetElement.dataset.colorValue = JSON.stringify(colorArray);
+      this.hideModal("colorPickerModal");
+      return;
+    }
+
     this.hideModal("colorPickerModal");
     const { activeSystemForModal, activeColorSlot } = this.state;
     const newColor = this.modalColorPicker.color.rgb;
-    const payload = {
-      r: newColor.r,
-      g: newColor.g,
-      b: newColor.b,
-      colorIndex: activeColorSlot,
-      target: this.state.activeSide,
-    };
+
+    let payload = {};
+    if (activeSystemForModal === "sein") {
+      payload = { r: newColor.r, g: newColor.g, b: newColor.b };
+    } else {
+      payload = {
+        r: newColor.r,
+        g: newColor.g,
+        b: newColor.b,
+        colorIndex: activeColorSlot,
+        target: this.state.activeSide,
+      };
+    }
+
     const systemsToUpdate =
       this.state.isSyncMode &&
       ["alis", "shroud", "demon"].includes(activeSystemForModal)
@@ -597,7 +664,6 @@ class AeriApp {
 
   handleColorPickerCancel() {
     this.hideModal("colorPickerModal");
-    // Tidak perlu rollback karena preview tidak lagi mengubah state utama
   }
 
   async handleSaveLedCounts() {
@@ -754,6 +820,247 @@ class AeriApp {
   }
   hideSavingIndicator() {
     this.elements.savingIndicator.style.display = "none";
+  }
+
+  // --- FUNGSI-FUNGSI UNTUK EDITOR WELCOME ---
+
+  async loadCustomWelcomeSequence() {
+    try {
+      const response = await fetch("/get-custom-welcome");
+      if (!response.ok) throw new Error("Gagal memuat sekuens");
+      const sequence = await response.json();
+      this.state.customWelcomeSequence = sequence;
+      this.renderWelcomeEditor();
+    } catch (error) {
+      console.error("Gagal memuat sekuens welcome kustom:", error);
+      this.showToast("Gagal memuat sekuens kustom", "error");
+    }
+  }
+
+  renderWelcomeEditor() {
+    const container = this.elements.welcomeEditorContainer;
+    container.innerHTML = ""; // Bersihkan kontainer
+
+    const systems = [
+      { name: "Alis", key: 0 },
+      { name: "Shroud", key: 1 },
+      { name: "Demon", key: 2 },
+    ];
+
+    systems.forEach((system) => {
+      const row = document.createElement("div");
+      row.className = "editor-row";
+      row.innerHTML = `<label>${system.name}</label><div class="slots-container" data-system-key="${system.key}"></div>`;
+
+      const slotsContainer = row.querySelector(".slots-container");
+
+      const stepsForSystem = this.state.customWelcomeSequence.filter(
+        (step) => step.targetSystem === system.key
+      );
+
+      stepsForSystem.forEach((step, index) => {
+        slotsContainer.appendChild(this.createFilledSlotElement(step, index));
+      });
+
+      const addSlotBtn = document.createElement("div");
+      addSlotBtn.className = "slot add-slot";
+      addSlotBtn.textContent = "+";
+      addSlotBtn.dataset.action = "add";
+      slotsContainer.appendChild(addSlotBtn);
+
+      container.appendChild(row);
+    });
+  }
+
+  createFilledSlotElement(step) {
+    const slot = document.createElement("div");
+    slot.className = "slot filled";
+    slot.dataset.action = "edit";
+
+    const effect = this.config.effectModes.find(
+      (m) => m.value === step.effectMode
+    );
+    const effectName = effect ? effect.name : "Unknown";
+
+    let colorDotsHtml = "";
+    if (effect && step.colors) {
+      for (let i = 0; i < effect.colorSlots; i++) {
+        const color = step.colors[i] || [0, 0, 0];
+        colorDotsHtml += `<div class="slot-color-dot" style="background-color: rgb(${color.join(
+          ","
+        )});"></div>`;
+      }
+    }
+
+    slot.innerHTML = `
+          <div class="slot-effect-name">${effectName}</div>
+          <div class="slot-colors-preview">${colorDotsHtml}</div>
+          <small>${step.duration} ms</small>
+      `;
+    return slot;
+  }
+
+  handleSlotClick(e) {
+    const target = e.target.closest(".slot");
+    if (!target) return;
+
+    const action = target.dataset.action;
+    const slotsContainer = target.parentElement;
+    const systemKey = parseInt(slotsContainer.dataset.systemKey);
+
+    let stepIndex = -1;
+    if (action === "edit") {
+      const allSlotsInRow = Array.from(
+        slotsContainer.querySelectorAll(".slot.filled")
+      );
+      const uiIndex = allSlotsInRow.indexOf(target);
+
+      let count = 0;
+      this.state.customWelcomeSequence.forEach((step, idx) => {
+        if (step.targetSystem === systemKey) {
+          if (count === uiIndex) {
+            stepIndex = idx;
+          }
+          count++;
+        }
+      });
+    }
+    this.openEffectStepModal(systemKey, stepIndex);
+  }
+
+  openEffectStepModal(systemKey, stepIndex) {
+    this.state.activeEditorContext = { systemKey, stepIndex };
+    const modal = this.elements.effectStepModal;
+
+    modal.effectSelect.innerHTML = this.config.effectModes
+      .map((mode) => `<option value="${mode.value}">${mode.name}</option>`)
+      .join("");
+
+    if (stepIndex > -1) {
+      // Mode Edit
+      const step = this.state.customWelcomeSequence[stepIndex];
+      modal.effectSelect.value = step.effectMode;
+      modal.sideSelect.value = step.side;
+      modal.durationInput.value = step.duration;
+      modal.deleteBtn.style.display = "block";
+    } else {
+      // Mode Tambah
+      modal.effectSelect.value = 0;
+      modal.sideSelect.value = 0;
+      modal.durationInput.value = 500;
+      modal.deleteBtn.style.display = "none";
+    }
+
+    this.renderModalColorSlots();
+    this.showModal("effectStepModal");
+  }
+
+  renderModalColorSlots() {
+    const modal = this.elements.effectStepModal;
+    const effectValue = parseInt(modal.effectSelect.value);
+    const effect = this.config.effectModes.find((m) => m.value === effectValue);
+    const numSlots = effect ? effect.colorSlots : 0;
+
+    const container = modal.colorSlotsContainer;
+    container.innerHTML = "";
+
+    const existingStep =
+      this.state.activeEditorContext.stepIndex > -1
+        ? this.state.customWelcomeSequence[
+            this.state.activeEditorContext.stepIndex
+          ]
+        : null;
+
+    if (numSlots === 0) {
+      container.innerHTML = "<small>Efek ini tidak menggunakan warna.</small>";
+      return;
+    }
+
+    for (let i = 0; i < numSlots; i++) {
+      let color = [255, 0, 0]; // Default color
+      if (existingStep && existingStep.colors && existingStep.colors[i]) {
+        color = existingStep.colors[i];
+      }
+      const colorSegment = document.createElement("div");
+      colorSegment.className = "color-segment";
+      colorSegment.style.backgroundColor = `rgb(${color.join(",")})`;
+      colorSegment.dataset.colorIndex = i;
+      colorSegment.dataset.colorValue = JSON.stringify(color);
+
+      colorSegment.addEventListener("click", (e) => {
+        const el = e.currentTarget;
+        this.showColorPickerForEditor(el);
+      });
+      container.appendChild(colorSegment);
+    }
+  }
+
+  showColorPickerForEditor(targetElement) {
+    this.state.activeSystemForModal = "editor";
+    this.state.activeColorSlot = targetElement;
+    const currentColor = JSON.parse(targetElement.dataset.colorValue);
+    this.state.originalColor = {
+      r: currentColor[0],
+      g: currentColor[1],
+      b: currentColor[2],
+    };
+    this.modalColorPicker.color.rgb = this.state.originalColor;
+    this.showModal("colorPickerModal");
+  }
+
+  handleEffectStepSave() {
+    const { systemKey, stepIndex } = this.state.activeEditorContext;
+    const modal = this.elements.effectStepModal;
+
+    const colorSegments =
+      modal.colorSlotsContainer.querySelectorAll(".color-segment");
+    const colors = Array.from(colorSegments).map((el) =>
+      JSON.parse(el.dataset.colorValue)
+    );
+
+    const newStep = {
+      targetSystem: systemKey,
+      side: parseInt(modal.sideSelect.value),
+      effectMode: parseInt(modal.effectSelect.value),
+      duration: parseInt(modal.durationInput.value),
+      colors: colors,
+    };
+
+    if (stepIndex > -1) {
+      // Update step yang ada
+      this.state.customWelcomeSequence[stepIndex] = newStep;
+    } else {
+      // Tambah step baru
+      this.state.customWelcomeSequence.push(newStep);
+    }
+
+    this.renderWelcomeEditor();
+    this.hideModal("effectStepModal");
+  }
+
+  handleEffectStepDelete() {
+    const { stepIndex } = this.state.activeEditorContext;
+    if (stepIndex > -1) {
+      this.state.customWelcomeSequence.splice(stepIndex, 1);
+      this.renderWelcomeEditor();
+    }
+    this.hideModal("effectStepModal");
+  }
+
+  async saveCustomWelcomeSequence() {
+    this.showSavingIndicator();
+    try {
+      await this.api.post(
+        "/save-custom-welcome",
+        JSON.stringify(this.state.customWelcomeSequence),
+        false
+      );
+      this.showToast("Sekuens welcome kustom berhasil disimpan!", "success");
+    } catch (error) {
+      this.showToast("Gagal menyimpan sekuens", "error");
+    } finally {
+      this.hideSavingIndicator();
+    }
   }
 }
 

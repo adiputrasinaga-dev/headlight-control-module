@@ -1,11 +1,6 @@
 /*
  * ===================================================================
- * AERI LIGHT - EFFECTS IMPLEMENTATION
- * ===================================================================
- * Deskripsi:
- * File ini berisi kode implementasi untuk setiap efek lampu.
- *
- * v18.9: Menambahkan implementasi untuk 10 efek baru.
+ * AERI LIGHT - EFFECTS IMPLEMENTATION (REVISED)
  * ===================================================================
  */
 
@@ -14,7 +9,7 @@
 // Mode 0: Solid
 void solid(EffectParams &params)
 {
-    fill_solid(params.leds, params.ledCount, params.color1);
+    fl::fill_solid(params.leds, params.ledCount, params.color1);
 }
 
 // Mode 1: Breathing
@@ -23,19 +18,19 @@ void breathing(EffectParams &params)
     uint8_t scale = sin8(params.animStep * params.speed);
     CRGB scaledColor = params.color1;
     scaledColor.nscale8(scale);
-    fill_solid(params.leds, params.ledCount, scaledColor);
+    fl::fill_solid(params.leds, params.ledCount, scaledColor);
 }
 
 // Mode 2: Rainbow
 void rainbow(EffectParams &params)
 {
-    fill_rainbow(params.leds, params.ledCount, params.animStep * params.speed, 256 / params.ledCount);
+    fl::fill_rainbow(params.leds, params.ledCount, params.animStep * params.speed, 256 / params.ledCount);
 }
 
 // Mode 3: Comet
 void comet(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 64);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 64);
     float p = fmod((float)params.animStep * params.speed * 0.5, (float)params.ledCount + 15);
     if ((int)p < params.ledCount)
     {
@@ -46,7 +41,7 @@ void comet(EffectParams &params)
 // Mode 4: Cylon Scanner
 void cylonScanner(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 64);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 64);
     int p = map(triwave8((params.animStep * params.speed) / 2), 0, 255, 0, params.ledCount - 4);
     if (p >= 0 && (p + 3) < params.ledCount)
     {
@@ -60,7 +55,7 @@ void cylonScanner(EffectParams &params)
 // Mode 5: Twinkle
 void twinkle(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 40);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 40);
     if (random8() < 80)
     {
         params.leds[random16(params.ledCount)] = (random8() < 128) ? params.color1 : params.color2;
@@ -76,7 +71,7 @@ void fire(EffectParams &params)
     }
     if (random8() < 80)
     {
-        params.leds[random16(params.ledCount)] = HeatColor(random8(160, 255));
+        params.leds[random16(params.ledCount)] = fl::HeatColor(random8(160, 255));
     }
 }
 
@@ -95,7 +90,7 @@ void plasmaBall(EffectParams &params)
     for (int i = 0; i < params.ledCount; i++)
     {
         int val = sin8(i * 10 + plasma1) + sin8(i * 12 + plasma2) + sin8(i * 14 + plasma3);
-        params.leds[i] = blend(CRGB::Black, params.color1, map(val, 0, 765, 0, 255));
+        params.leds[i] = fl::blend(CRGB::Black, params.color1, map(val, 0, 765, 0, 255));
         params.leds[i] += params.color2.nscale8(32);
     }
 }
@@ -123,12 +118,12 @@ void colorWipe(EffectParams &params)
     uint16_t pos = map(params.animStep * params.speed, 0, 65535, 0, params.ledCount * 2);
     if (pos < params.ledCount)
     {
-        fill_solid(params.leds, pos, params.color1);
-        fill_solid(params.leds + pos, params.ledCount - pos, params.color2);
+        fl::fill_solid(params.leds, pos, params.color1);
+        fl::fill_solid(params.leds + pos, params.ledCount - pos, params.color2);
     }
     else
     {
-        fill_solid(params.leds, params.ledCount, params.color1);
+        fl::fill_solid(params.leds, params.ledCount, params.color1);
     }
 }
 
@@ -169,11 +164,11 @@ void pacifica_loop(EffectParams &params)
     sCIStart1 += deltams1;
     sCIStart2 -= deltams2;
     uint16_t wave_angle = sCIStart1 - sCIStart2;
-    CRGB c1 = ColorFromPalette(pacifica_palette_1, sCIStart1 >> 8);
-    CRGB c2 = ColorFromPalette(pacifica_palette_2, sCIStart2 >> 8);
+    CRGB c1 = fl::ColorFromPalette(pacifica_palette_1, sCIStart1 >> 8);
+    CRGB c2 = fl::ColorFromPalette(pacifica_palette_2, sCIStart2 >> 8);
     for (uint16_t i = 0; i < params.ledCount; i++)
     {
-        CRGB mix = blend(c1, c2, cos8(wave_angle));
+        CRGB mix = fl::blend(c1, c2, cos8(wave_angle));
         wave_angle += 25;
         params.leds[i] = mix;
     }
@@ -192,7 +187,7 @@ void bouncingBalls(EffectParams &params)
     if (millis() - last_update < 15)
         return;
     last_update = millis();
-    fadeToBlackBy(params.leds, params.ledCount, 60);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 60);
     for (int i = 0; i < 3; i++)
     {
         p[i] += v[i];
@@ -219,7 +214,7 @@ void bouncingBalls(EffectParams &params)
 // Mode 14: Meteor
 void meteor(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 128);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 128);
     int pos = params.animStep * params.speed % (params.ledCount * 2);
     if (pos < params.ledCount)
     {
@@ -230,7 +225,7 @@ void meteor(EffectParams &params)
 // Mode 15: Confetti
 void confetti(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 10);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 10);
     int pos = random16(params.ledCount);
     params.leds[pos] += CHSV(params.animStep * params.speed + random8(64), 200, 255);
 }
@@ -238,7 +233,7 @@ void confetti(EffectParams &params)
 // Mode 16: Juggle
 void juggle(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 20);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 20);
     for (int i = 0; i < 8; i++)
     {
         uint16_t pos = sin16(params.animStep * (i + 3) * params.speed + i * 10000) * (params.ledCount - 1) / 65535;
@@ -249,7 +244,7 @@ void juggle(EffectParams &params)
 // Mode 17: Sinelon (Dot Bergerak)
 void sinelon(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 20);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 20);
     int pos = beatsin16(13 * params.speed, 0, params.ledCount - 1);
     params.leds[pos] += params.color1;
 }
@@ -276,13 +271,13 @@ void matrix(EffectParams &params)
     {
         params.leds[i] = params.leds[i - 1];
     }
-    fadeToBlackBy(params.leds, params.ledCount, 20);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 20);
 }
 
 // Mode 20: Ripple
 void ripple(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 10);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 10);
     static int center = 0;
     static uint8_t step = -1;
 
@@ -314,7 +309,7 @@ void ripple(EffectParams &params)
 // Mode 21: Larson Scanner (KITT)
 void larsonScanner(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 40);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 40);
     int pos = beatsin16(10 * params.speed, 0, params.ledCount);
     if (pos > 0)
         params.leds[pos - 1] = params.color1.nscale8(80);
@@ -343,11 +338,11 @@ void twoColorWipe(EffectParams &params)
 // Mode 23: Lightning
 void lightning(EffectParams &params)
 {
-    fadeToBlackBy(params.leds, params.ledCount, 100);
+    fl::fadeToBlackBy(params.leds, params.ledCount, 100);
     if (random8() < params.speed)
     {
         int start = random16(params.ledCount);
         int len = random16(params.ledCount - start);
-        fill_solid(params.leds + start, len, CRGB::White);
+        fl::fill_solid(params.leds + start, len, CRGB::White);
     }
 }

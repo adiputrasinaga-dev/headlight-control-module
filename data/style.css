@@ -1,17 +1,16 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.0 - STYLESHEET (INDEPENDENT SIDE CONTROL)
+ * AERI LIGHT v24.5 - STYLESHEET (CONTROL SPACING FIX)
  * ===================================================================
  * Deskripsi Perubahan:
- * - ADD: Style untuk .master-control dan .side-selector untuk
- * mengakomodasi fungsionalitas baru.
- * - CLEANUP: Menghapus style yang tidak lagi diperlukan yang
- * berhubungan dengan layout dashboard.
+ * - ADDED: Aturan CSS untuk .effect-details-wrapper untuk menambah
+ * jarak vertikal antara dropdown mode dan slider di bawahnya.
  * ===================================================================
  */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700&display=swap");
 
 :root {
+  /* Colors */
   --bg-color: #101114;
   --panel-bg: #1d1f23;
   --primary-accent: #e60023;
@@ -26,6 +25,13 @@
   --info-color: #7f848e;
   --input-bg: rgba(16, 17, 20, 0.8);
   --divider-color: rgba(255, 255, 255, 0.1);
+
+  /* Spacing System */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
 }
 
 html,
@@ -38,7 +44,7 @@ body {
   font-family: "Rajdhani", sans-serif;
   font-weight: 500;
   margin: 0;
-  padding: 15px;
+  padding: var(--space-md);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -69,7 +75,7 @@ summary {
 .main-header {
   width: 100%;
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg);
   position: relative;
   min-height: 50px;
   display: flex;
@@ -80,17 +86,17 @@ summary {
 .main-header h1 {
   font-size: 2.2em;
   margin: 0;
-  padding: 10px 0;
+  padding: var(--space-sm) 0;
   color: var(--primary-accent);
   text-shadow: 0 0 10px var(--primary-glow);
 }
 #statusIndicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   font-size: 0.9em;
   font-weight: 600;
-  margin-top: 5px;
+  margin-top: var(--space-sm);
   text-transform: uppercase;
 }
 #statusIcon {
@@ -112,9 +118,9 @@ summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  padding: var(--space-md);
   border-bottom: 1px solid var(--divider-color);
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg);
 }
 .master-control label {
   font-size: 1.5em;
@@ -148,7 +154,7 @@ summary {
   border: 1px solid var(--border-color);
   border-bottom: 2px solid transparent;
   color: var(--text-muted);
-  padding: 15px;
+  padding: var(--space-md);
   font-size: 1em;
   font-family: "Rajdhani", sans-serif;
   font-weight: 700;
@@ -187,7 +193,7 @@ details.cyber-panel,
 .modal-content {
   background: var(--panel-bg);
   border: 1px solid var(--border-color);
-  margin-bottom: 25px;
+  margin-bottom: var(--space-lg);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
   transition: background-color 0.3s, border-color 0.3s;
@@ -199,14 +205,14 @@ details.cyber-panel,
 }
 .cyber-panel .panel-body,
 details.cyber-panel .panel-body {
-  padding: 25px;
+  padding: var(--space-xl);
   position: relative;
 }
 details > summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 25px;
+  padding: var(--space-lg) var(--space-xl);
   font-size: 1.2em;
   cursor: pointer;
   list-style: none;
@@ -222,12 +228,12 @@ details[open] > summary {
 .panel-body {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: var(--space-xl);
 }
 .control-group {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: var(--space-sm);
   position: relative;
   z-index: 1;
 }
@@ -240,25 +246,33 @@ details[open] > summary {
   text-transform: uppercase;
   color: var(--secondary-accent);
   text-align: center;
-  margin-bottom: -15px;
+  margin-bottom: 0;
   font-weight: 700;
 }
 .control-group > small {
   text-align: center;
   font-size: 0.8em;
   color: var(--text-muted);
-  margin-top: -10px;
+  margin-top: calc(-1 * var(--space-sm));
 }
 .slider-label-container {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  padding: 0 var(--space-xs);
+}
+/* BARU: Aturan untuk wrapper detail efek */
+.effect-details-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg); /* Jarak antar slider */
+  margin-top: var(--space-lg); /* Jarak dari dropdown mode */
 }
 .btn {
   background-color: transparent;
   color: var(--primary-accent);
   border: 1px solid var(--primary-accent);
-  padding: 15px;
+  padding: var(--space-md);
   font-size: 1em;
   font-family: "Rajdhani", sans-serif;
   font-weight: 700;
@@ -307,7 +321,7 @@ details[open] > summary {
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 15px;
+  gap: var(--space-md);
   flex-wrap: wrap;
 }
 select,
@@ -317,7 +331,7 @@ input[type="password"] {
   background: var(--input-bg);
   border: 1px solid var(--text-muted);
   color: var(--text-color);
-  padding: 15px;
+  padding: var(--space-md);
   font-size: 1.1em;
   font-family: "Rajdhani", sans-serif;
   font-weight: 600;
@@ -341,7 +355,7 @@ input:focus {
 .radio-group label {
   flex-grow: 1;
   text-align: center;
-  padding: 12px;
+  padding: var(--space-md);
   cursor: pointer;
   font-weight: 700;
   transition: all 0.2s ease-in-out;
@@ -372,37 +386,42 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
+  height: 8px;
   background: var(--input-bg);
   outline: none;
   border: 1px solid var(--text-muted);
+  border-radius: 8px;
   padding: 0;
   transition: background-color 0.3s;
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px;
-  height: 24px;
+  appearance: none;
+  width: 20px;
+  height: 20px;
   background: var(--primary-accent);
   cursor: pointer;
-  border: 2px solid var(--panel-bg);
-  clip-path: polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%);
+  border-radius: 50%;
+  border: 3px solid var(--text-color);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  margin-top: -10px;
+  margin-top: 0;
 }
 input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   background: var(--primary-accent);
   cursor: pointer;
-  border: 2px solid var(--panel-bg);
-  border-radius: 0;
+  border-radius: 50%;
+  border: 3px solid var(--text-color);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 }
+
 .sync-toggle-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px;
+  padding: var(--space-md);
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--border-color);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
@@ -483,10 +502,10 @@ input:checked + .slider:before {
   z-index: 5000;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-sm);
 }
 .toast {
-  padding: 15px 25px;
+  padding: var(--space-md) var(--space-lg);
   color: var(--text-color);
   background: var(--panel-bg);
   backdrop-filter: blur(10px);
@@ -535,7 +554,7 @@ input:checked + .slider:before {
 .preset-preview-container {
   background-color: rgba(0, 0, 0, 0.2);
   border-left: 3px solid var(--secondary-accent);
-  padding: 15px;
+  padding: var(--space-md);
   border-radius: 4px;
   transition: all 0.3s ease;
   min-height: 60px;
@@ -556,6 +575,98 @@ input:checked + .slider:before {
   color: var(--error-color);
   font-style: italic;
   font-weight: 600;
+}
+
+/* STYLING UNTUK EDITOR WELCOME KUSTOM */
+.welcome-editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin-top: var(--space-md);
+}
+
+.editor-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background-color: rgba(0, 0, 0, 0.2);
+  border-left: 3px solid var(--secondary-accent);
+}
+
+.editor-row > label {
+  font-family: "Orbitron", sans-serif;
+  font-size: 1.2em;
+  text-transform: uppercase;
+  color: var(--secondary-accent);
+}
+
+.slots-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.slot {
+  width: 100px;
+  height: 50px;
+  border: 2px dashed var(--text-muted);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 2em;
+  font-weight: bold;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  padding: var(--space-sm);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.slot:hover {
+  background-color: var(--primary-accent);
+  border-color: var(--primary-accent);
+  color: var(--bg-color);
+}
+
+.slot.filled {
+  border-style: solid;
+  border-color: var(--primary-accent);
+  color: var(--text-color);
+  font-size: 0.7em;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.slot-effect-name {
+  font-weight: 700;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slot-colors-preview {
+  display: flex;
+  gap: 3px;
+  width: 100%;
+  justify-content: center;
+}
+
+.slot-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #fff;
+  border: 1px solid var(--bg-color);
+}
+
+.modal-content .control-group {
+  width: 100%;
 }
 
 @media (max-width: 768px) {

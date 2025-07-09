@@ -1,9 +1,6 @@
 /*
  * ===================================================================
- * AERI LIGHT - WELCOME EFFECTS IMPLEMENTATION
- * ===================================================================
- * Deskripsi:
- * v19.2: Membungkus semua fungsi dalam namespace.
+ * AERI LIGHT - WELCOME EFFECTS IMPLEMENTATION (REVISED)
  * ===================================================================
  */
 
@@ -40,14 +37,14 @@ namespace WelcomeEffects
         uint32_t halfDuration = params.duration / 2;
         if (params.elapsed < halfDuration)
         {
-            fill_rainbow(params.leds, params.ledCount, map(params.elapsed, 0, halfDuration, 0, 255), 256 / params.ledCount);
+            fl::fill_rainbow(params.leds, params.ledCount, map(params.elapsed, 0, halfDuration, 0, 255), 256 / params.ledCount);
         }
         else
         {
             uint8_t blend_amount = map(params.elapsed, halfDuration, params.duration, 0, 255);
             for (int i = 0; i < params.ledCount; i++)
             {
-                params.leds[i] = blend(params.leds[i], params.color1, blend_amount);
+                params.leds[i] = fl::blend(params.leds[i], params.color1, blend_amount);
             }
         }
     }
@@ -68,7 +65,7 @@ namespace WelcomeEffects
     // Mode 4: Dual Comet
     void dualCometWelcome(WelcomeEffectParams &params)
     {
-        fadeToBlackBy(params.leds, params.ledCount, 64);
+        fl::fadeToBlackBy(params.leds, params.ledCount, 64);
         int mid = params.ledCount / 2;
         int pos = map(params.elapsed, 0, params.duration, 0, mid);
         if (mid + pos < params.ledCount)
@@ -82,7 +79,7 @@ namespace WelcomeEffects
     {
         int mid = params.ledCount / 2;
         int len = map(params.elapsed, 0, params.duration, 0, mid);
-        fill_solid(params.leds + mid - len, len * 2, params.color1);
+        fl::fill_solid(params.leds + mid - len, len * 2, params.color1);
     }
 
 } // namespace WelcomeEffects

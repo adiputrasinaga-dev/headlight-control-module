@@ -53,6 +53,57 @@
       </div>
     </div>
 
+    <div id="effect-step-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-content">
+        <h3>Atur Langkah Efek</h3>
+
+        <div class="control-group">
+          <label for="modalEffectSelect">Pilih Efek</label>
+          <select id="modalEffectSelect" class="cyber-input"></select>
+        </div>
+
+        <div class="control-group">
+          <label for="modalSideSelect">Target Sisi</label>
+          <select id="modalSideSelect" class="cyber-input">
+            <option value="0">Keduanya</option>
+            <option value="1">Kiri</option>
+            <option value="2">Kanan</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Warna Efek</label>
+          <div id="modal-color-slots-container" class="color-bar-container">
+            <!-- Slot warna dinamis akan dirender di sini oleh JS -->
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label for="modalDurationInput">Durasi (milidetik)</label>
+          <input
+            type="number"
+            id="modalDurationInput"
+            class="cyber-input"
+            value="500"
+            min="50"
+            step="50"
+          />
+        </div>
+
+        <div class="modal-actions">
+          <button
+            id="btnDeleteStep"
+            class="btn btn-danger"
+            style="margin-right: auto; display: none"
+          >
+            Hapus
+          </button>
+          <button id="btnCancelStep" class="btn btn-secondary">Batal</button>
+          <button id="btnSaveStep" class="btn">Simpan Langkah</button>
+        </div>
+      </div>
+    </div>
+
     <header class="main-header">
       <button id="hamburger-btn" class="hamburger-btn">
         <span></span><span></span><span></span>
@@ -67,11 +118,15 @@
     <main>
       <nav class="desktop-nav">
         <button data-tab="Kontrol" class="tab-btn active">KONTROL</button>
+        <button data-tab="EditorWelcome" class="tab-btn">EDITOR WELCOME</button>
         <button data-tab="Pengaturan" class="tab-btn">PENGATURAN</button>
       </nav>
       <nav id="mobile-menu" class="mobile-menu">
         <button data-tab="Kontrol" class="mobile-nav-link active">
           KONTROL
+        </button>
+        <button data-tab="EditorWelcome" class="mobile-nav-link">
+          EDITOR WELCOME
         </button>
         <button data-tab="Pengaturan" class="mobile-nav-link">
           PENGATURAN
@@ -127,12 +182,6 @@
                 name="controlTarget"
                 value="demon"
               /><label for="controlTargetDemon">DEMON</label>
-              <input
-                type="radio"
-                id="controlTargetSein"
-                name="controlTarget"
-                value="sein"
-              /><label for="controlTargetSein">SEIN</label>
             </div>
 
             <div class="side-selector-container">
@@ -162,7 +211,33 @@
             <div id="alis-controls-container"></div>
             <div id="shroud-controls-container" style="display: none"></div>
             <div id="demon-controls-container" style="display: none"></div>
-            <div id="sein-controls-container" style="display: none"></div>
+          </div>
+        </section>
+      </div>
+
+      <div id="tabEditorWelcome" class="tab-content">
+        <section class="cyber-panel">
+          <div class="panel-body">
+            <h3>Editor Sekuens Welcome Kustom</h3>
+            <p>
+              Buat animasi welcome unik Anda dengan menambahkan langkah-langkah
+              efek. Klik [+] untuk memulai.
+            </p>
+            <div id="welcome-editor-container" class="welcome-editor-container">
+              <!-- Baris-baris editor akan dirender di sini oleh JS -->
+            </div>
+            <div class="modal-actions">
+              <button id="btnPreviewCustomWelcome" class="btn btn-secondary">
+                Preview Sekuens
+              </button>
+              <button id="btnSaveCustomWelcome" class="btn">
+                Simpan Sekuens
+              </button>
+            </div>
+            <small
+              >Catatan: Setelah disimpan, pilih "Efek Kustom" pada menu dropdown
+              "PILIH ANIMASI" di tab Pengaturan untuk mengaktifkannya.</small
+            >
           </div>
         </section>
       </div>
@@ -199,6 +274,18 @@
             </div>
           </div>
         </details>
+
+        <details class="cyber-panel">
+          <summary>
+            PENGATURAN LAMPU SEIN<span class="accordion-icon">›</span>
+          </summary>
+          <div class="panel-body">
+            <div id="sein-controls-container">
+              <!-- Kontrol sein akan dirender di sini oleh JavaScript -->
+            </div>
+          </div>
+        </details>
+
         <details class="cyber-panel">
           <summary>
             PENGATURAN JUMLAH LED<span class="accordion-icon">›</span>
@@ -288,7 +375,7 @@
       </div>
     </main>
 
-    <!-- <script src="config.js" defer></script> -->
+    <script src="config.js" defer></script>
     <script src="app.js" defer></script>
     <script>
       if ("serviceWorker" in navigator) {

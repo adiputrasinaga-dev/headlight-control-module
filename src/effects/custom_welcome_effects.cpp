@@ -1,10 +1,6 @@
 /*
  * ===================================================================
- * AERI LIGHT - CUSTOM WELCOME EFFECTS IMPLEMENTATION
- * ===================================================================
- * Deskripsi:
- * v19.2: Memperbaiki panggilan fungsi `fill_gradient_RGB` dan
- * membungkus semua fungsi dalam namespace.
+ * AERI LIGHT - CUSTOM WELCOME EFFECTS IMPLEMENTATION (REVISED)
  * ===================================================================
  */
 
@@ -17,14 +13,13 @@ namespace CustomWelcomeEffects
     void charging(WelcomeEffectParams &params)
     {
         uint16_t pos = map(params.elapsed, 0, params.duration, 0, params.ledCount);
-        // PERBAIKAN: Menambahkan namespace fl::
         fl::fill_gradient_RGB(params.leds, pos, CRGB::Black, params.color1);
     }
 
     // 7. Glitch
     void glitch(WelcomeEffectParams &params)
     {
-        fadeToBlackBy(params.leds, params.ledCount, 20);
+        fl::fadeToBlackBy(params.leds, params.ledCount, 20);
         if (random8() < 50)
         {
             int start = random16(params.ledCount);
@@ -40,7 +35,7 @@ namespace CustomWelcomeEffects
     void sonar(WelcomeEffectParams &params)
     {
         uint8_t pos = map(params.elapsed, 0, params.duration, 0, params.ledCount - 1);
-        fadeToBlackBy(params.leds, params.ledCount, 40);
+        fl::fadeToBlackBy(params.leds, params.ledCount, 40);
         params.leds[pos] = params.color1;
     }
 
@@ -50,14 +45,14 @@ namespace CustomWelcomeEffects
         uint16_t pos = map(params.elapsed, 0, params.duration, 0, params.ledCount);
         for (uint16_t i = 0; i < pos; i++)
         {
-            params.leds[i] = HeatColor(map(i, 0, params.ledCount, 0, 255));
+            params.leds[i] = fl::HeatColor(map(i, 0, params.ledCount, 0, 255));
         }
     }
 
     // 10. Warp Speed
     void warpSpeed(WelcomeEffectParams &params)
     {
-        fadeToBlackBy(params.leds, params.ledCount, 20);
+        fl::fadeToBlackBy(params.leds, params.ledCount, 20);
         for (int i = 0; i < 5; i++)
         {
             params.leds[random16(params.ledCount)] = CRGB::White;
@@ -74,7 +69,7 @@ namespace CustomWelcomeEffects
             uint8_t val2 = cos8(i * 10 + t);
             CRGB c1 = params.color1;
             CRGB c2 = params.color2;
-            params.leds[i] = blend(c1.nscale8(val1), c2.nscale8(val2), 128);
+            params.leds[i] = fl::blend(c1.nscale8(val1), c2.nscale8(val2), 128);
         }
     }
 
@@ -82,7 +77,7 @@ namespace CustomWelcomeEffects
     void laser(WelcomeEffectParams &params)
     {
         uint16_t pos = map(params.elapsed, 0, params.duration, 0, params.ledCount);
-        fill_solid(params.leds, params.ledCount, CRGB::Black);
+        fl::fill_solid(params.leds, params.ledCount, CRGB::Black);
         if (pos < params.ledCount)
             params.leds[pos] = params.color1;
     }
@@ -95,7 +90,7 @@ namespace CustomWelcomeEffects
         uint8_t finalBeat = (beat > beat2) ? beat : beat2;
         CRGB c = params.color1;
         c.nscale8(finalBeat);
-        fill_solid(params.leds, params.ledCount, c);
+        fl::fill_solid(params.leds, params.ledCount, c);
     }
 
     // 14. Liquid
@@ -105,14 +100,14 @@ namespace CustomWelcomeEffects
         for (uint16_t i = 0; i < params.ledCount; i++)
         {
             uint8_t val = cubicwave8((i * 20) + t);
-            params.leds[i] = blend(CRGB::Black, params.color1, val);
+            params.leds[i] = fl::blend(CRGB::Black, params.color1, val);
         }
     }
 
     // 15. Spotlights
     void spotlights(WelcomeEffectParams &params)
     {
-        fadeToBlackBy(params.leds, params.ledCount, 30);
+        fl::fadeToBlackBy(params.leds, params.ledCount, 30);
         uint32_t t = params.elapsed / 20;
         for (int i = 0; i < 4; i++)
         {
