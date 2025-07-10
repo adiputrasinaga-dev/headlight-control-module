@@ -3,7 +3,7 @@
  * AERI LIGHT v24.9 - APP LOGIC (MODAL & Z-INDEX FIX)
  * ===================================================================
  * Deskripsi Perubahan:
- * - ADDED: Navigasi mobile kini dapat ditutup dengan mengklik di luar area menu.
+ * - ADDED: Implementasi semua rekomendasi perbaikan UI.
  * - FIXED: Tombol Preview Welcome kini mengirimkan mode & durasi yang dipilih untuk pratinjau instan.
  * - ADDED: Welcome animation baru sesuai permintaan.
  * - ADDED: Panel pratinjau warna di atas color wheel.
@@ -23,30 +23,31 @@ const AppConfig = {
   systems: ["alis", "shroud", "demon"],
 
   effectModes: [
-    { name: "Solid", value: 0, colorSlots: 1, hasSpeed: false },
-    { name: "Breathing", value: 1, colorSlots: 1, hasSpeed: true },
-    { name: "Rainbow", value: 2, colorSlots: 0, hasSpeed: true },
-    { name: "Comet", value: 3, colorSlots: 1, hasSpeed: true },
-    { name: "Cylon Scanner", value: 4, colorSlots: 1, hasSpeed: true },
-    { name: "Twinkle", value: 5, colorSlots: 2, hasSpeed: true },
-    { name: "Fire", value: 6, colorSlots: 0, hasSpeed: true },
-    { name: "Gradient Shift", value: 7, colorSlots: 3, hasSpeed: true },
-    { name: "Plasma Ball", value: 8, colorSlots: 2, hasSpeed: true },
-    { name: "Theater Chase", value: 9, colorSlots: 1, hasSpeed: true },
-    { name: "Color Wipe", value: 10, colorSlots: 2, hasSpeed: true },
-    { name: "Pride", value: 11, colorSlots: 0, hasSpeed: true },
-    { name: "Pacifica", value: 12, colorSlots: 0, hasSpeed: false },
-    { name: "Bouncing Balls", value: 13, colorSlots: 3, hasSpeed: true },
-    { name: "Meteor", value: 14, colorSlots: 1, hasSpeed: true },
-    { name: "Confetti", value: 15, colorSlots: 0, hasSpeed: true },
-    { name: "Juggle", value: 16, colorSlots: 0, hasSpeed: true },
-    { name: "Sinelon", value: 17, colorSlots: 1, hasSpeed: true },
-    { name: "Noise", value: 18, colorSlots: 0, hasSpeed: true },
-    { name: "Matrix", value: 19, colorSlots: 0, hasSpeed: true },
-    { name: "Ripple", value: 20, colorSlots: 1, hasSpeed: true },
-    { name: "Larson Scanner", value: 21, colorSlots: 1, hasSpeed: true },
-    { name: "Two-Color Wipe", value: 22, colorSlots: 2, hasSpeed: true },
-    { name: "Lightning", value: 23, colorSlots: 0, hasSpeed: true },
+    { name: "No Effect", value: 0, colorSlots: 0, hasSpeed: false },
+    { name: "Solid", value: 1, colorSlots: 1, hasSpeed: false },
+    { name: "Breathing", value: 2, colorSlots: 1, hasSpeed: true },
+    { name: "Rainbow", value: 3, colorSlots: 0, hasSpeed: true },
+    { name: "Comet", value: 4, colorSlots: 1, hasSpeed: true },
+    { name: "Cylon Scanner", value: 5, colorSlots: 1, hasSpeed: true },
+    { name: "Twinkle", value: 6, colorSlots: 2, hasSpeed: true },
+    { name: "Fire", value: 7, colorSlots: 0, hasSpeed: true },
+    { name: "Gradient Shift", value: 8, colorSlots: 3, hasSpeed: true },
+    { name: "Plasma Ball", value: 9, colorSlots: 2, hasSpeed: true },
+    { name: "Theater Chase", value: 10, colorSlots: 1, hasSpeed: true },
+    { name: "Color Wipe", value: 11, colorSlots: 2, hasSpeed: true },
+    { name: "Pride", value: 12, colorSlots: 0, hasSpeed: true },
+    { name: "Pacifica", value: 13, colorSlots: 0, hasSpeed: false },
+    { name: "Bouncing Balls", value: 14, colorSlots: 3, hasSpeed: true },
+    { name: "Meteor", value: 15, colorSlots: 1, hasSpeed: true },
+    { name: "Confetti", value: 16, colorSlots: 0, hasSpeed: true },
+    { name: "Juggle", value: 17, colorSlots: 0, hasSpeed: true },
+    { name: "Sinelon", value: 18, colorSlots: 1, hasSpeed: true },
+    { name: "Noise", value: 19, colorSlots: 0, hasSpeed: true },
+    { name: "Matrix", value: 20, colorSlots: 0, hasSpeed: true },
+    { name: "Ripple", value: 21, colorSlots: 1, hasSpeed: true },
+    { name: "Larson Scanner", value: 22, colorSlots: 1, hasSpeed: true },
+    { name: "Two-Color Wipe", value: 23, colorSlots: 2, hasSpeed: true },
+    { name: "Lightning", value: 24, colorSlots: 0, hasSpeed: true },
   ],
   welcomeModes: [
     { name: "Power-On Scan", value: 0 },
@@ -200,10 +201,8 @@ class AeriApp {
     );
 
     this.modalColorPicker.on("color:change", (color) => {
-      // Perbarui pratinjau warna
       this.elements.colorPickerModal.previewSwatch.style.backgroundColor =
         color.hexString;
-
       if (this.state.isUpdatingFromInput) return;
       this.updateManualInputs(color);
     });
@@ -261,12 +260,21 @@ class AeriApp {
       btnSaveLedCounts: document.getElementById("btnSaveLedCounts"),
       welcomeModeSelect: document.getElementById("welcomeMode"),
       welcomeDurationInput: document.getElementById("welcomeDuration"),
+      welcomeDurationContainer: document.getElementById(
+        "welcomeDurationContainer"
+      ),
+      customWelcomeDurationNote: document.getElementById(
+        "customWelcomeDurationNote"
+      ),
       btnPreviewWelcome: document.getElementById("btnPreviewWelcome"),
       btnSaveWelcome: document.getElementById("btnSaveWelcome"),
       btnReset: document.getElementById("btnReset"),
       tabEditorWelcome: document.getElementById("tabEditorWelcome"),
       welcomeEditorContainer: document.getElementById(
         "welcome-editor-container"
+      ),
+      customWelcomeTotalDuration: document.getElementById(
+        "customWelcomeTotalDuration"
       ),
       btnSaveCustomWelcome: document.getElementById("btnSaveCustomWelcome"),
       btnPreviewCustomWelcome: document.getElementById(
@@ -300,8 +308,6 @@ class AeriApp {
     this.elements.hamburgerBtn.addEventListener("click", () =>
       this.toggleMobileMenu()
     );
-
-    // KODE BARU: Menutup navigasi saat klik di luar
     document.addEventListener("click", (e) => {
       if (
         !this.elements.mobileMenu.contains(e.target) &&
@@ -311,7 +317,6 @@ class AeriApp {
         this.toggleMobileMenu();
       }
     });
-
     this.elements.systemSelector.addEventListener("change", (e) =>
       this.handleSystemChange(e)
     );
@@ -328,7 +333,6 @@ class AeriApp {
       this.handleColorPickerCancel()
     );
 
-    // Event listeners untuk input manual
     const { redInput, greenInput, blueInput, hexInput } =
       this.elements.colorPickerModal;
     redInput.addEventListener("input", () => this.handleManualRgbInput());
@@ -366,7 +370,6 @@ class AeriApp {
     this.elements.btnReset.addEventListener("click", () =>
       this.showModal("resetModal")
     );
-
     this.elements.welcomeEditorContainer.addEventListener("click", (e) =>
       this.handleSlotClick(e)
     );
@@ -388,14 +391,15 @@ class AeriApp {
     this.elements.btnPreviewCustomWelcome.addEventListener("click", () =>
       this.handlePreviewWelcome()
     );
+    this.elements.welcomeModeSelect.addEventListener("change", (e) =>
+      this.handleWelcomeModeChange(e)
+    );
   }
 
-  // === FUNGSI BARU UNTUK INPUT WARNA MANUAL ===
   updateManualInputs(color) {
     const { redInput, greenInput, blueInput, hexInput } =
       this.elements.colorPickerModal;
     const { r, g, b } = color.rgb;
-
     redInput.value = r;
     greenInput.value = g;
     blueInput.value = b;
@@ -407,11 +411,9 @@ class AeriApp {
     let r = parseInt(redInput.value) || 0;
     let g = parseInt(greenInput.value) || 0;
     let b = parseInt(blueInput.value) || 0;
-
     r = Math.max(0, Math.min(255, r));
     g = Math.max(0, Math.min(255, g));
     b = Math.max(0, Math.min(255, b));
-
     this.state.isUpdatingFromInput = true;
     this.modalColorPicker.color.rgb = { r, g, b };
     this.elements.colorPickerModal.hexInput.value =
@@ -422,7 +424,6 @@ class AeriApp {
   handleManualHexInput(e) {
     const hexInput = e.target;
     let hex = hexInput.value;
-
     if (/^#?([0-9A-F]{3}){1,2}$/i.test(hex)) {
       this.state.isUpdatingFromInput = true;
       this.modalColorPicker.color.hexString = hex;
@@ -433,7 +434,6 @@ class AeriApp {
       this.state.isUpdatingFromInput = false;
     }
   }
-  // ===========================================
 
   createApiHandler() {
     const post = async (endpoint, body, isJson = true) => {
@@ -497,77 +497,39 @@ class AeriApp {
   renderSystem(system) {
     const container = this.elements.controlContainers[system];
     if (!container || !this.state.appState[system]) return;
-
     const systemState = this.state.appState[system];
     const isLightSystem = system !== "sein";
     const configModes = this.config.modes[system] || [];
-
     const activeSideKey =
       this.state.activeSide === "kanan" ? "stateKanan" : "stateKiri";
     const sideState = isLightSystem ? systemState[activeSideKey] : systemState;
-
-    let html = `
-      <div class="control-group">
-        <label for="mode-${system}">Mode Lampu</label>
-        <select id="mode-${system}" class="cyber-input">
-          ${configModes
-            .map(
-              (mode, index) =>
-                `<option value="${index}" ${
-                  sideState.mode === index ? "selected" : ""
-                }>${mode}</option>`
-            )
-            .join("")}
-        </select>
-      </div>
-      <div class="effect-details-wrapper">`;
-
+    let html = `<div class="control-group"><label for="mode-${system}">Mode Lampu</label><select id="mode-${system}" class="cyber-input">${configModes
+      .map(
+        (mode, index) =>
+          `<option value="${index}" ${
+            sideState.mode === index ? "selected" : ""
+          }>${mode}</option>`
+      )
+      .join("")}</select></div><div class="effect-details-wrapper">`;
     const effectConfig = isLightSystem
       ? this.config.effectModes.find((e) => e.value === sideState.mode)
       : this.config.seinModes.find((e) => e.value === sideState.mode);
-
     const brightnessPercent = Math.round((sideState.kecerahan / 255) * 100);
-    html += `
-          <div class="control-group">
-            <div class="slider-label-container">
-              <label for="brightness-${system}">Kecerahan</label>
-              <span id="brightness-value-${system}" class="panel-info">${brightnessPercent}%</span>
-            </div>
-            <input type="range" id="brightness-${system}" min="0" max="100" value="${brightnessPercent}">
-          </div>`;
-
+    html += `<div class="control-group"><div class="slider-label-container"><label for="brightness-${system}">Kecerahan</label><span id="brightness-value-${system}" class="panel-info">${brightnessPercent}%</span></div><input type="range" id="brightness-${system}" min="0" max="100" value="${brightnessPercent}"></div>`;
     if (effectConfig && effectConfig.hasSpeed) {
-      html += `
-            <div class="control-group">
-              <div class="slider-label-container">
-                <label for="speed-${system}">Kecepatan</label>
-                <span id="speed-value-${system}" class="panel-info">${sideState.kecepatan}%</span>
-              </div>
-              <input type="range" id="speed-${system}" min="0" max="100" value="${sideState.kecepatan}">
-            </div>`;
+      html += `<div class="control-group"><div class="slider-label-container"><label for="speed-${system}">Kecepatan</label><span id="speed-value-${system}" class="panel-info">${sideState.kecepatan}%</span></div><input type="range" id="speed-${system}" min="0" max="100" value="${sideState.kecepatan}"></div>`;
     }
-
     if (effectConfig && effectConfig.colorSlots > 0) {
-      html += `
-            <div class="control-group">
-              <label>Warna</label>
-              <div class="color-bar-container">
-                ${
-                  isLightSystem
-                    ? sideState.warna
-                        .slice(0, effectConfig.colorSlots)
-                        .map((color, index) =>
-                          this.renderColorSegment(system, index)
-                        )
-                        .join("")
-                    : this.renderColorSegment(system, 0)
-                }
-              </div>
-            </div>`;
+      html += `<div class="control-group"><label>Warna</label><div class="color-bar-container">${
+        isLightSystem
+          ? sideState.warna
+              .slice(0, effectConfig.colorSlots)
+              .map((color, index) => this.renderColorSegment(system, index))
+              .join("")
+          : this.renderColorSegment(system, 0)
+      }</div></div>`;
     }
-
     html += `</div>`;
-
     container.innerHTML = html;
     this.attachDynamicEventListeners(system);
   }
@@ -575,15 +537,12 @@ class AeriApp {
   renderColorSegment(system, index) {
     const systemState = this.state.appState[system];
     const isLightSystem = system !== "sein";
-
     const activeSideKey =
       this.state.activeSide === "kanan" ? "stateKanan" : "stateKiri";
     const sideState = isLightSystem ? systemState[activeSideKey] : null;
-
     const color = isLightSystem ? sideState.warna[index] : systemState.warna;
     const rgb = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
     const hex = this.rgbToHex(color[0], color[1], color[2]);
-
     return `<div class="color-segment" style="background-color: ${rgb};" data-system="${system}" data-color-index="${index}">${hex}</div>`;
   }
 
@@ -605,21 +564,18 @@ class AeriApp {
       )
       .join("");
     this.elements.welcomeDurationInput.value = welcome.durasi;
-
+    this.handleWelcomeModeChange({ target: this.elements.welcomeModeSelect });
     this.renderSystem("sein");
   }
 
   attachDynamicEventListeners(system) {
     const container = this.elements.controlContainers[system];
     if (!container) return;
-
     const modeEl = container.querySelector(`#mode-${system}`);
     if (modeEl) {
       modeEl.addEventListener("change", (e) => {
         const newModeValue = parseInt(e.target.value);
-
         this.handleControlSave(system, "mode", newModeValue);
-
         const activeSideKey =
           this.state.activeSide === "kanan" ? "stateKanan" : "stateKiri";
         if (this.state.appState[system]) {
@@ -630,11 +586,9 @@ class AeriApp {
             this.state.appState[system][activeSideKey].mode = newModeValue;
           }
         }
-
         this.renderSystem(system);
       });
     }
-
     const speedEl = container.querySelector(`#speed-${system}`);
     if (speedEl) {
       speedEl.addEventListener("input", (e) =>
@@ -644,7 +598,6 @@ class AeriApp {
         this.handleControlSave(system, "kecepatan", e.target.value)
       );
     }
-
     const brightnessEl = container.querySelector(`#brightness-${system}`);
     if (brightnessEl) {
       brightnessEl.addEventListener("input", (e) =>
@@ -654,7 +607,6 @@ class AeriApp {
         this.handleControlSave(system, "kecerahan", e.target.value)
       );
     }
-
     container.querySelectorAll(".color-segment").forEach((el) => {
       el.addEventListener("click", (e) => {
         const system = e.target.dataset.system;
@@ -686,11 +638,9 @@ class AeriApp {
       .querySelectorAll(".tab-content")
       .forEach((content) => (content.style.display = "none"));
     document.getElementById(`tab${tabName}`).style.display = "block";
-
     if (tabName === "EditorWelcome") {
       this.renderWelcomeEditor();
     }
-
     if (this.elements.mobileMenu.classList.contains("open")) {
       this.toggleMobileMenu();
     }
@@ -702,13 +652,11 @@ class AeriApp {
 
   handleSystemChange(e) {
     this.state.activeSystem = e.target.value;
-
     if (this.state.activeSystem === "sein") {
       this.elements.sideSelectorContainer.style.display = "none";
     } else {
       this.elements.sideSelectorContainer.style.display = "block";
     }
-
     Object.values(this.elements.controlContainers).forEach((container) => {
       if (container.id.includes(this.state.activeSystem)) {
         container.style.display = "block";
@@ -761,16 +709,12 @@ class AeriApp {
       this.state.isSyncMode && ["alis", "shroud", "demon"].includes(system)
         ? ["alis", "shroud", "demon"]
         : [system];
-
     const intValue = parseInt(value);
-
     this.showSavingIndicator();
-
     const promises = systemsToUpdate.map((sys) => {
       let payload = { [key]: intValue, target: this.state.activeSide };
       return this.api.post(`/set-mode-${sys}`, payload);
     });
-
     Promise.all(promises)
       .catch((err) => {
         console.error("Sync save failed:", err);
@@ -794,11 +738,9 @@ class AeriApp {
       this.hideModal("colorPickerModal");
       return;
     }
-
     this.hideModal("colorPickerModal");
     const { activeSystemForModal, activeColorSlot } = this.state;
     const newColor = this.modalColorPicker.color.rgb;
-
     let payload = {};
     if (activeSystemForModal === "sein") {
       payload = { r: newColor.r, g: newColor.g, b: newColor.b };
@@ -811,13 +753,11 @@ class AeriApp {
         target: this.state.activeSide,
       };
     }
-
     const systemsToUpdate =
       this.state.isSyncMode &&
       ["alis", "shroud", "demon"].includes(activeSystemForModal)
         ? ["alis", "shroud", "demon"]
         : [activeSystemForModal];
-
     this.showSavingIndicator();
     try {
       for (const sys of systemsToUpdate) {
@@ -869,7 +809,6 @@ class AeriApp {
   async handlePreviewWelcome() {
     this.showSavingIndicator();
     try {
-      // Kirim mode dan durasi yang sedang dipilih untuk pratinjau
       const payload = {
         mode: parseInt(this.elements.welcomeModeSelect.value),
         durasi: parseInt(this.elements.welcomeDurationInput.value),
@@ -968,25 +907,19 @@ class AeriApp {
   showColorPicker(system, colorIndex) {
     this.state.activeSystemForModal = system;
     this.state.activeColorSlot = colorIndex;
-
     const systemState = this.state.appState[system];
     const isLightSystem = system !== "sein";
     const activeSideKey =
       this.state.activeSide === "kanan" ? "stateKanan" : "stateKiri";
     const sideState = isLightSystem ? systemState[activeSideKey] : null;
-
     const color = isLightSystem
       ? sideState.warna[colorIndex]
       : systemState.warna;
-
     this.state.originalColor = { r: color[0], g: color[1], b: color[2] };
     this.modalColorPicker.color.rgb = this.state.originalColor;
-
-    // Update pratinjau dan input manual saat picker ditampilkan
     this.elements.colorPickerModal.previewSwatch.style.backgroundColor =
       this.modalColorPicker.color.hexString;
     this.updateManualInputs(this.modalColorPicker.color);
-
     this.showModal("colorPickerModal");
   }
 
@@ -1006,7 +939,27 @@ class AeriApp {
     this.elements.savingIndicator.style.display = "none";
   }
 
-  // --- FUNGSI-FUNGSI UNTUK EDITOR WELCOME ---
+  // === FUNGSI UI BARU ===
+  handleWelcomeModeChange(e) {
+    const selectedMode = parseInt(e.target.value);
+    const customEffectModeValue = 16;
+    if (selectedMode === customEffectModeValue) {
+      this.elements.welcomeDurationContainer.style.display = "none";
+      this.elements.customWelcomeDurationNote.style.display = "block";
+    } else {
+      this.elements.welcomeDurationContainer.style.display = "flex";
+      this.elements.customWelcomeDurationNote.style.display = "none";
+    }
+  }
+
+  updateCustomWelcomeTotalDuration() {
+    const totalDuration = this.state.customWelcomeSequence.reduce(
+      (acc, step) => acc + step.duration,
+      0
+    );
+    this.elements.customWelcomeTotalDuration.textContent = `Total Durasi: ${totalDuration} ms`;
+  }
+  // ======================
 
   async loadCustomWelcomeSequence() {
     try {
@@ -1024,48 +977,40 @@ class AeriApp {
   renderWelcomeEditor() {
     const container = this.elements.welcomeEditorContainer;
     container.innerHTML = "";
-
     const systems = [
       { name: "Alis", key: 0 },
       { name: "Shroud", key: 1 },
       { name: "Demon", key: 2 },
     ];
-
     systems.forEach((system) => {
       const row = document.createElement("div");
       row.className = "editor-row";
       row.innerHTML = `<label>${system.name}</label><div class="slots-container" data-system-key="${system.key}"></div>`;
-
       const slotsContainer = row.querySelector(".slots-container");
-
       const stepsForSystem = this.state.customWelcomeSequence.filter(
         (step) => step.targetSystem === system.key
       );
-
       stepsForSystem.forEach((step, index) => {
         slotsContainer.appendChild(this.createFilledSlotElement(step, index));
       });
-
       const addSlotBtn = document.createElement("div");
       addSlotBtn.className = "slot add-slot";
       addSlotBtn.textContent = "+";
       addSlotBtn.dataset.action = "add";
       slotsContainer.appendChild(addSlotBtn);
-
       container.appendChild(row);
     });
+    this.updateCustomWelcomeTotalDuration();
   }
 
   createFilledSlotElement(step) {
     const slot = document.createElement("div");
     slot.className = "slot filled";
     slot.dataset.action = "edit";
-
     const effect = this.config.effectModes.find(
       (m) => m.value === step.effectMode
     );
     const effectName = effect ? effect.name : "Unknown";
-
     let colorDotsHtml = "";
     if (effect && step.colors) {
       for (let i = 0; i < effect.colorSlots; i++) {
@@ -1075,30 +1020,22 @@ class AeriApp {
         )});"></div>`;
       }
     }
-
-    slot.innerHTML = `
-          <div class="slot-effect-name">${effectName}</div>
-          <div class="slot-colors-preview">${colorDotsHtml}</div>
-          <small>${step.duration} ms</small>
-      `;
+    slot.innerHTML = `<div class="slot-effect-name">${effectName}</div><div class="slot-colors-preview">${colorDotsHtml}</div><small>${step.duration} ms</small>`;
     return slot;
   }
 
   handleSlotClick(e) {
     const target = e.target.closest(".slot");
     if (!target) return;
-
     const action = target.dataset.action;
     const slotsContainer = target.parentElement;
     const systemKey = parseInt(slotsContainer.dataset.systemKey);
-
     let stepIndex = -1;
     if (action === "edit") {
       const allSlotsInRow = Array.from(
         slotsContainer.querySelectorAll(".slot.filled")
       );
       const uiIndex = allSlotsInRow.indexOf(target);
-
       let count = 0;
       this.state.customWelcomeSequence.forEach((step, idx) => {
         if (step.targetSystem === systemKey) {
@@ -1115,26 +1052,21 @@ class AeriApp {
   openEffectStepModal(systemKey, stepIndex) {
     this.state.activeEditorContext = { systemKey, stepIndex };
     const modal = this.elements.effectStepModal;
-
     modal.effectSelect.innerHTML = this.config.effectModes
       .map((mode) => `<option value="${mode.value}">${mode.name}</option>`)
       .join("");
-
     if (stepIndex > -1) {
-      // Mode Edit
       const step = this.state.customWelcomeSequence[stepIndex];
       modal.effectSelect.value = step.effectMode;
       modal.sideSelect.value = step.side;
       modal.durationInput.value = step.duration;
       modal.deleteBtn.style.display = "block";
     } else {
-      // Mode Tambah
       modal.effectSelect.value = 0;
       modal.sideSelect.value = 0;
       modal.durationInput.value = 500;
       modal.deleteBtn.style.display = "none";
     }
-
     this.renderModalColorSlots();
     this.showModal("effectStepModal");
   }
@@ -1144,36 +1076,29 @@ class AeriApp {
     const effectValue = parseInt(modal.effectSelect.value);
     const effect = this.config.effectModes.find((m) => m.value === effectValue);
     const numSlots = effect ? effect.colorSlots : 0;
-
     const container = modal.colorSlotsContainer;
     container.innerHTML = "";
-
     const existingStep =
       this.state.activeEditorContext.stepIndex > -1
         ? this.state.customWelcomeSequence[
             this.state.activeEditorContext.stepIndex
           ]
         : null;
-
     if (numSlots === 0) {
       container.innerHTML = "<small>Efek ini tidak menggunakan warna.</small>";
       return;
     }
-
     for (let i = 0; i < numSlots; i++) {
-      let color = [255, 0, 0]; // Default color
+      let color = [255, 0, 0];
       if (existingStep && existingStep.colors && existingStep.colors[i]) {
         color = existingStep.colors[i];
       }
-
       const colorSegment = document.createElement("div");
       colorSegment.className = "color-segment";
       colorSegment.style.backgroundColor = `rgb(${color.join(",")})`;
       colorSegment.dataset.colorIndex = i;
       colorSegment.dataset.colorValue = JSON.stringify(color);
-
       colorSegment.textContent = this.rgbToHex(color[0], color[1], color[2]);
-
       colorSegment.addEventListener("click", (e) => {
         const el = e.currentTarget;
         this.showColorPickerForEditor(el);
@@ -1192,25 +1117,20 @@ class AeriApp {
       b: currentColor[2],
     };
     this.modalColorPicker.color.rgb = this.state.originalColor;
-
-    // Update pratinjau dan input manual saat picker ditampilkan
     this.elements.colorPickerModal.previewSwatch.style.backgroundColor =
       this.modalColorPicker.color.hexString;
     this.updateManualInputs(this.modalColorPicker.color);
-
     this.showModal("colorPickerModal");
   }
 
   handleEffectStepSave() {
     const { systemKey, stepIndex } = this.state.activeEditorContext;
     const modal = this.elements.effectStepModal;
-
     const colorSegments =
       modal.colorSlotsContainer.querySelectorAll(".color-segment");
     const colors = Array.from(colorSegments).map((el) =>
       JSON.parse(el.dataset.colorValue)
     );
-
     const newStep = {
       targetSystem: systemKey,
       side: parseInt(modal.sideSelect.value),
@@ -1218,13 +1138,11 @@ class AeriApp {
       duration: parseInt(modal.durationInput.value),
       colors: colors,
     };
-
     if (stepIndex > -1) {
       this.state.customWelcomeSequence[stepIndex] = newStep;
     } else {
       this.state.customWelcomeSequence.push(newStep);
     }
-
     this.renderWelcomeEditor();
     this.hideModal("effectStepModal");
   }
@@ -1255,7 +1173,6 @@ class AeriApp {
   }
 }
 
-// Initialize the app
 document.addEventListener("DOMContentLoaded", () => {
   const app = new AeriApp(AppConfig);
   app.init();

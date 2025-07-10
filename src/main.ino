@@ -106,8 +106,8 @@ bool stateChanged = false;
 
 // --- Effect Registries & Names ---
 typedef void (*EffectFunction)(EffectParams &);
-EffectFunction effectRegistry[] = {solid, breathing, rainbow, comet, cylonScanner, twinkle, fire, gradientShift, plasmaBall, theaterChase, colorWipe, pride, pacifica, bouncingBalls, meteor, confetti, juggle, sinelon, noise, matrix, ripple, larsonScanner, twoColorWipe, lightning};
-const char *effectNames[] = {"Solid", "Breathing", "Rainbow", "Comet", "Cylon Scanner", "Twinkle", "Fire", "Gradient Shift", "Plasma Ball", "Theater Chase", "Color Wipe", "Pride", "Pacifica", "Bouncing Balls", "Meteor", "Confetti", "Juggle", "Sinelon", "Noise", "Matrix", "Ripple", "Larson Scanner", "Two-Color Wipe", "Lightning"};
+EffectFunction effectRegistry[] = {noEffect, solid, breathing, rainbow, comet, cylonScanner, twinkle, fire, gradientShift, plasmaBall, theaterChase, colorWipe, pride, pacifica, bouncingBalls, meteor, confetti, juggle, sinelon, noise, matrix, ripple, larsonScanner, twoColorWipe, lightning};
+const char *effectNames[] = {"No Effect", "Solid", "Breathing", "Rainbow", "Comet", "Cylon Scanner", "Twinkle", "Fire", "Gradient Shift", "Plasma Ball", "Theater Chase", "Color Wipe", "Pride", "Pacifica", "Bouncing Balls", "Meteor", "Confetti", "Juggle", "Sinelon", "Noise", "Matrix", "Ripple", "Larson Scanner", "Two-Color Wipe", "Lightning"};
 const uint8_t numEffects = sizeof(effectRegistry) / sizeof(effectRegistry[0]);
 
 void runCustomWelcome(WelcomeEffectParams &params);

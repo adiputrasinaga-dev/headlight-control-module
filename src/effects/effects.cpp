@@ -6,6 +6,14 @@
 
 #include "effects.h"
 
+// Efek Kosong (No Effect / Delay)
+void noEffect(EffectParams &params)
+{
+    // Fungsi ini sengaja tidak melakukan apa-apa atau mematikan lampu
+    // untuk menciptakan jeda dalam sekuens.
+    fill_solid(params.leds, params.ledCount, CRGB::Black);
+}
+
 // Mode 0: Solid
 void solid(EffectParams &params)
 {

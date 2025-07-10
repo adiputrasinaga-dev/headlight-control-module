@@ -39,13 +39,11 @@
     <div id="color-picker-modal" class="modal-backdrop" style="display: none">
       <div class="modal-content modal-color-picker">
         <h3>Pilih Warna</h3>
-
         <div id="color-preview-swatch"></div>
         <div
           id="modalColorPickerContainer"
           class="color-picker-container"
         ></div>
-
         <div class="manual-color-inputs">
           <div class="rgb-input-group">
             <div class="control-group">
@@ -89,7 +87,6 @@
             />
           </div>
         </div>
-
         <div class="modal-actions">
           <button id="btnModalBatal" class="btn btn-secondary">Batal</button>
           <button id="btnModalSimpan" class="btn">Simpan</button>
@@ -100,13 +97,11 @@
     <div id="effect-step-modal" class="modal-backdrop" style="display: none">
       <div class="modal-content">
         <h3>Atur Langkah Efek</h3>
-
         <div class="modal-body">
           <div class="control-group">
             <label for="modalEffectSelect">Pilih Efek</label>
             <select id="modalEffectSelect" class="cyber-input"></select>
           </div>
-
           <div class="control-group">
             <label for="modalSideSelect">Target Sisi</label>
             <select id="modalSideSelect" class="cyber-input">
@@ -115,7 +110,6 @@
               <option value="2">Kanan</option>
             </select>
           </div>
-
           <div class="control-group">
             <label>Warna Efek</label>
             <div
@@ -123,7 +117,6 @@
               class="color-bar-container"
             ></div>
           </div>
-
           <div class="control-group">
             <label for="modalDurationInput">Durasi (milidetik)</label>
             <input
@@ -136,15 +129,8 @@
             />
           </div>
         </div>
-
         <div class="modal-actions">
-          <button
-            id="btnDeleteStep"
-            class="btn btn-danger"
-            style="margin-right: auto; display: none"
-          >
-            Hapus
-          </button>
+          <button id="btnDeleteStep" class="btn btn-danger">Hapus</button>
           <button id="btnCancelStep" class="btn btn-secondary">Batal</button>
           <button id="btnSaveStep" class="btn">Simpan</button>
         </div>
@@ -190,14 +176,13 @@
             >
               Menyimpan...
             </div>
-
             <div class="master-control">
               <label for="masterPowerSwitch">MASTER POWER</label>
-              <label class="switch large"
-                ><input type="checkbox" id="masterPowerSwitch" /><span
+              <label class="switch large">
+                <input type="checkbox" id="masterPowerSwitch" /><span
                   class="slider round"
-                ></span
-              ></label>
+                ></span>
+              </label>
             </div>
 
             <div class="sync-toggle-container">
@@ -265,7 +250,15 @@
       <div id="tabEditorWelcome" class="tab-content">
         <section class="cyber-panel">
           <div class="panel-body">
-            <h3>Editor Sekuens Welcome Kustom</h3>
+            <div class="editor-header">
+              <h3>Editor Sekuens Welcome Kustom</h3>
+              <div
+                id="customWelcomeTotalDuration"
+                class="editor-total-duration"
+              >
+                Total Durasi: 0 ms
+              </div>
+            </div>
             <p>
               Buat animasi welcome unik Anda dengan menambahkan langkah-langkah
               efek. Klik [+] untuk memulai.
@@ -316,9 +309,7 @@
               <button id="btnLoadPreset" class="btn btn-secondary">
                 Muat Profil
               </button>
-              <button id="btnSavePreset" class="btn">
-                Simpan Profil Saat Ini
-              </button>
+              <button id="btnSavePreset" class="btn">Simpan Profil</button>
             </div>
           </div>
         </details>
@@ -339,8 +330,8 @@
           <div class="panel-body">
             <small>Atur jumlah LED per sisi untuk setiap bagian lampu.</small>
             <div class="control-group">
-              <label for="ledCountAlis">Jumlah LED Alis</label
-              ><input
+              <label for="ledCountAlis">Jumlah LED Alis</label>
+              <input
                 type="number"
                 id="ledCountAlis"
                 min="0"
@@ -349,8 +340,8 @@
               />
             </div>
             <div class="control-group">
-              <label for="ledCountShroud">Jumlah LED Shroud</label
-              ><input
+              <label for="ledCountShroud">Jumlah LED Shroud</label>
+              <input
                 type="number"
                 id="ledCountShroud"
                 min="0"
@@ -359,8 +350,8 @@
               />
             </div>
             <div class="control-group">
-              <label for="ledCountDemon">Jumlah LED Demon</label
-              ><input
+              <label for="ledCountDemon">Jumlah LED Demon</label>
+              <input
                 type="number"
                 id="ledCountDemon"
                 min="0"
@@ -369,8 +360,8 @@
               />
             </div>
             <div class="control-group">
-              <label for="ledCountSein">Jumlah LED Sein</label
-              ><input
+              <label for="ledCountSein">Jumlah LED Sein</label>
+              <input
                 type="number"
                 id="ledCountSein"
                 min="0"
@@ -383,18 +374,19 @@
             </div>
           </div>
         </details>
+
         <details class="cyber-panel">
           <summary>
             WELCOME ANIMATION<span class="accordion-icon">›</span>
           </summary>
           <div class="panel-body">
             <div class="control-group">
-              <label for="welcomeMode">PILIH ANIMASI</label
-              ><select id="welcomeMode" class="cyber-input"></select>
+              <label for="welcomeMode">PILIH ANIMASI</label>
+              <select id="welcomeMode" class="cyber-input"></select>
             </div>
-            <div class="control-group">
-              <label for="welcomeDuration">DURASI (detik)</label
-              ><input
+            <div id="welcomeDurationContainer" class="control-group">
+              <label for="welcomeDuration">DURASI (detik)</label>
+              <input
                 type="number"
                 id="welcomeDuration"
                 min="1"
@@ -402,13 +394,21 @@
                 class="cyber-input"
               />
             </div>
+            <small
+              id="customWelcomeDurationNote"
+              class="info-note"
+              style="display: none"
+              >Durasi diatur di dalam Editor Welcome.</small
+            >
             <div class="modal-actions">
               <button id="btnPreviewWelcome" class="btn btn-secondary">
-                Preview</button
-              ><button id="btnSaveWelcome" class="btn">Simpan</button>
+                Preview
+              </button>
+              <button id="btnSaveWelcome" class="btn">Simpan</button>
             </div>
           </div>
         </details>
+
         <details class="cyber-panel">
           <summary>SISTEM<span class="accordion-icon">›</span></summary>
           <div class="panel-body">
@@ -420,7 +420,6 @@
         </details>
       </div>
     </main>
-
     <script src="app.js" defer></script>
   </body>
 </html>

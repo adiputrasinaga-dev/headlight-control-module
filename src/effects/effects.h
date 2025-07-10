@@ -28,6 +28,7 @@ struct EffectParams
 };
 
 // Deklarasi (prototipe) untuk setiap fungsi efek
+void noEffect(EffectParams &params); // Efek kosong baru
 void solid(EffectParams &params);
 void breathing(EffectParams &params);
 void rainbow(EffectParams &params);
