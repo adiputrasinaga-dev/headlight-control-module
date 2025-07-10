@@ -1,16 +1,10 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.6 - FIRMWARE (INDEPENDENT CONTROL & UX FIX)
+ * AERI LIGHT v24.6 - FIRMWARE (REFACTORED)
  * ===================================================================
  * Deskripsi Perubahan:
- * - ADDED: Tambahan delay(1) di loop utama untuk stabilitas Wi-Fi.
- * - FIXED: Tombol Preview Welcome kini menerima mode & durasi untuk pratinjau instan.
- * - ADDED: Welcome animation baru sesuai permintaan.
- * - RESTRUCTURED: `mode` dan `kecepatan` dipindahkan ke dalam struct `LightState`.
- * - FIXED: Logika di `handleSetModeLampu` dan (de)serialisasi disesuaikan.
- * - FIXED: Logika `jalankanModeLampu` disesuaikan untuk membaca dari state per-sisi.
- * - FIXED: Urutan logika di dalam loop() diubah agar welcome selalu jadi prioritas.
- * - CONFIG_VERSION dinaikkan ke 26 untuk memaksa reset pengaturan.
+ * - REFACTORED: Memecah fungsi setup() menjadi setupHardware() dan setupWebServer()
+ * untuk meningkatkan keterbacaan dan maintainabilitas.
  * ===================================================================
  */
 
@@ -104,6 +98,12 @@ unsigned long welcomeStartTime = 0;
 uint16_t animStep = 0;
 bool stateChanged = false;
 
+// Variabel baru untuk pratinjau warna
+bool isPreviewingColor = false;
+CRGB previewColorValue;
+uint8_t previewTargetSystem = 0; // 0=Alis, 1=Shroud, 2=Demon
+uint8_t previewTargetSide = 0;   // 0=keduanya, 1=kiri, 2=kanan
+
 // --- Effect Registries & Names ---
 typedef void (*EffectFunction)(EffectParams &);
 EffectFunction effectRegistry[] = {noEffect, solid, breathing, rainbow, comet, cylonScanner, twinkle, fire, gradientShift, plasmaBall, theaterChase, colorWipe, pride, pacifica, bouncingBalls, meteor, confetti, juggle, sinelon, noise, matrix, ripple, larsonScanner, twoColorWipe, lightning};
@@ -161,7 +161,7 @@ void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, Light
 void handleSetModeSein(AsyncWebServerRequest *request, JsonVariant &json);
 void handleSetLedCounts(AsyncWebServerRequest *request, JsonVariant &json);
 void handleSetWelcome(AsyncWebServerRequest *request, JsonVariant &json);
-void handlePreviewWelcome(AsyncWebServerRequest *request, JsonVariant &json); // Diubah untuk menerima JSON
+void handlePreviewWelcome(AsyncWebServerRequest *request, JsonVariant &json);
 void handleGetPresetName(AsyncWebServerRequest *request);
 void handleSavePreset(AsyncWebServerRequest *request, JsonVariant &json);
 void handleLoadPreset(AsyncWebServerRequest *request, JsonVariant &json);
@@ -169,19 +169,55 @@ void handleResetFactory(AsyncWebServerRequest *request);
 void initializeFileSystem();
 void handleGetCustomWelcome(AsyncWebServerRequest *request);
 void handleSaveCustomWelcome(AsyncWebServerRequest *request, uint8_t *data, size_t len);
+void setupHardware();
+void setupWebServer();
 
-void setup()
+// --- HANDLER BARU UNTUK PRATINJAU WARNA ---
+void handleStopPreview()
 {
-  Serial.begin(115200);
-  if (!LittleFS.begin(true))
+  isPreviewingColor = false;
+}
+
+void handlePreviewColor(AsyncWebServerRequest *request, JsonVariant &json)
+{
+  JsonObject obj = json.as<JsonObject>();
+
+  previewColorValue = CRGB(obj["r"], obj["g"], obj["b"]);
+  String system = obj["system"];
+  String side = obj["side"];
+
+  if (system == "alis")
+    previewTargetSystem = 0;
+  else if (system == "shroud")
+    previewTargetSystem = 1;
+  else if (system == "demon")
+    previewTargetSystem = 2;
+  else
   {
-    Serial.println("LittleFS Mount Failed");
+    isPreviewingColor = false; // Matikan jika sistem tidak valid
+    request->send(400, "text/plain", "Invalid System");
     return;
   }
 
-  initializeFileSystem();
-  bacaPengaturan();
+  if (side == "kiri")
+    previewTargetSide = 1;
+  else if (side == "kanan")
+    previewTargetSide = 2;
+  else
+    previewTargetSide = 0; // keduanya
 
+  isPreviewingColor = true;
+  request->send(200, "text/plain", "OK");
+}
+
+void handleCancelPreview(AsyncWebServerRequest *request)
+{
+  handleStopPreview();
+  request->send(200, "text/plain", "OK");
+}
+
+void setupHardware()
+{
   FastLED.addLeds<LED_TYPE, PIN_ALIS_KIRI, COLOR_ORDER>(ledsAlisKiri, MAX_LEDS);
   FastLED.addLeds<LED_TYPE, PIN_ALIS_KANAN, COLOR_ORDER>(ledsAlisKanan, MAX_LEDS);
   FastLED.addLeds<LED_TYPE, PIN_SHROUD_KIRI, COLOR_ORDER>(ledsShroudKiri, MAX_LEDS);
@@ -190,13 +226,10 @@ void setup()
   FastLED.addLeds<LED_TYPE, PIN_DEMON_KANAN, COLOR_ORDER>(ledsDemonKanan, MAX_LEDS);
   pinMode(PIN_INPUT_SEIN_KIRI, INPUT_PULLUP);
   pinMode(PIN_INPUT_SEIN_KANAN, INPUT_PULLUP);
+}
 
-  WiFi.softAP(AP_SSID, AP_PASSWORD);
-  Serial.print("Access Point: ");
-  Serial.println(AP_SSID);
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.softAPIP());
-
+void setupWebServer()
+{
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
 
@@ -219,7 +252,6 @@ void setup()
                                                                                    { handleSavePreset(request, json); });
   AsyncCallbackJsonWebHandler *loadPresetHandler = new AsyncCallbackJsonWebHandler("/load-preset", [](AsyncWebServerRequest *request, JsonVariant &json)
                                                                                    { handleLoadPreset(request, json); });
-  // Handler baru untuk preview welcome
   AsyncCallbackJsonWebHandler *previewWelcomeHandler = new AsyncCallbackJsonWebHandler("/preview-welcome", [](AsyncWebServerRequest *request, JsonVariant &json)
                                                                                        { handlePreviewWelcome(request, json); });
 
@@ -231,7 +263,15 @@ void setup()
   server.addHandler(setWelcomeHandler);
   server.addHandler(savePresetHandler);
   server.addHandler(loadPresetHandler);
-  server.addHandler(previewWelcomeHandler); // Tambahkan handler baru
+  server.addHandler(previewWelcomeHandler);
+
+  // Pendaftaran Handler Pratinjau
+  AsyncCallbackJsonWebHandler *previewColorHandler = new AsyncCallbackJsonWebHandler("/preview-color", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                     { handlePreviewColor(request, json); });
+  server.addHandler(previewColorHandler);
+
+  server.on("/cancel-preview", HTTP_POST, [](AsyncWebServerRequest *request)
+            { handleCancelPreview(request); });
 
   server.on("/get-preset-name", HTTP_GET, handleGetPresetName);
   server.on("/reset-factory", HTTP_POST, handleResetFactory);
@@ -249,6 +289,30 @@ void setup()
                     { request->send(404, "text/plain", "Not found"); });
 
   server.begin();
+}
+
+void setup()
+{
+  Serial.begin(115200);
+
+  if (!LittleFS.begin(true))
+  {
+    Serial.println("LittleFS Mount Failed");
+    return;
+  }
+
+  initializeFileSystem();
+  bacaPengaturan();
+  setupHardware();
+
+  WiFi.softAP(AP_SSID, AP_PASSWORD);
+  Serial.print("Access Point: ");
+  Serial.println(AP_SSID);
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.softAPIP());
+
+  setupWebServer();
+
   Serial.println("HTTP server and WebSocket started");
 }
 
@@ -309,6 +373,50 @@ void loop()
     jalankanModeLampu(shroudConfig, shroudConfig.stateKanan, ledsShroudKanan, ledCounts.shroud);
     jalankanModeLampu(demonConfig, demonConfig.stateKiri, ledsDemonKiri, ledCounts.demon);
     jalankanModeLampu(demonConfig, demonConfig.stateKanan, ledsDemonKanan, ledCounts.demon);
+  }
+
+  // Terapkan override pratinjau warna jika aktif
+  if (isPreviewingColor)
+  {
+    CRGB *ledsKiri = nullptr;
+    CRGB *ledsKanan = nullptr;
+    uint16_t ledCount = 0;
+
+    switch (previewTargetSystem)
+    {
+    case 0: // Alis
+      ledsKiri = ledsAlisKiri;
+      ledsKanan = ledsAlisKanan;
+      ledCount = ledCounts.alis;
+      break;
+    case 1: // Shroud
+      ledsKiri = ledsShroudKiri;
+      ledsKanan = ledsShroudKanan;
+      ledCount = ledCounts.shroud;
+      break;
+    case 2: // Demon
+      ledsKiri = ledsDemonKiri;
+      ledsKanan = ledsDemonKanan;
+      ledCount = ledCounts.demon;
+      break;
+    }
+
+    if (ledCount > 0)
+    {
+      if (previewTargetSide == 0)
+      { // keduanya
+        fill_solid(ledsKiri, ledCount, previewColorValue);
+        fill_solid(ledsKanan, ledCount, previewColorValue);
+      }
+      else if (previewTargetSide == 1)
+      { // kiri
+        fill_solid(ledsKiri, ledCount, previewColorValue);
+      }
+      else if (previewTargetSide == 2)
+      { // kanan
+        fill_solid(ledsKanan, ledCount, previewColorValue);
+      }
+    }
   }
 
   FastLED.show();
@@ -572,11 +680,13 @@ void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, Light
     simpanPengaturan();
     stateChanged = true;
   }
+  handleStopPreview();
   request->send(200, "text/plain", "OK");
 }
 
 void handleSetModeSein(AsyncWebServerRequest *request, JsonVariant &json)
 {
+  handleStopPreview(); // Tambahkan ini
   JsonObject obj = json.as<JsonObject>();
   bool needsSave = false;
   if (!obj["mode"].isNull())
@@ -610,6 +720,7 @@ void handleSetModeSein(AsyncWebServerRequest *request, JsonVariant &json)
 
 void handleSetLedCounts(AsyncWebServerRequest *request, JsonVariant &json)
 {
+  handleStopPreview(); // Tambahkan ini
   JsonObject obj = json.as<JsonObject>();
   ledCounts.alis = obj["alis"] | ledCounts.alis;
   ledCounts.shroud = obj["shroud"] | ledCounts.shroud;
@@ -617,7 +728,6 @@ void handleSetLedCounts(AsyncWebServerRequest *request, JsonVariant &json)
   ledCounts.sein = obj["sein"] | ledCounts.sein;
   simpanPengaturan();
 
-  // KODE BARU: Langsung bersihkan semua LED dan tampilkan perubahannya
   FastLED.clear();
   FastLED.show();
 
@@ -627,6 +737,7 @@ void handleSetLedCounts(AsyncWebServerRequest *request, JsonVariant &json)
 
 void handleSetWelcome(AsyncWebServerRequest *request, JsonVariant &json)
 {
+  handleStopPreview(); // Tambahkan ini
   JsonObject obj = json.as<JsonObject>();
   welcomeConfig.mode = obj["mode"] | welcomeConfig.mode;
   welcomeConfig.durasi = obj["durasi"] | welcomeConfig.durasi;
@@ -637,6 +748,7 @@ void handleSetWelcome(AsyncWebServerRequest *request, JsonVariant &json)
 
 void handlePreviewWelcome(AsyncWebServerRequest *request, JsonVariant &json)
 {
+  handleStopPreview(); // Tambahkan ini
   JsonObject obj = json.as<JsonObject>();
 
   // Ambil mode dan durasi dari payload untuk preview, JANGAN DISIMPAN
@@ -674,6 +786,7 @@ void handleLoadPreset(AsyncWebServerRequest *request, JsonVariant &json)
       deserializeState(stateObj);
       simpanPengaturan();
       stateChanged = true;
+      handleStopPreview();
       request->send(200, "text/plain", "Preset dimuat");
       return;
     }
@@ -767,6 +880,7 @@ void handleGetPresetName(AsyncWebServerRequest *request)
 
 void handleResetFactory(AsyncWebServerRequest *request)
 {
+  handleStopPreview(); // Tambahkan ini
   resetToDefaults();
   stateChanged = true;
   request->send(200, "text/plain", "OK");

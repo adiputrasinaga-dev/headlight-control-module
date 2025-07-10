@@ -1,27 +1,99 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.9 - APP LOGIC (MODAL & Z-INDEX FIX)
+ * AERI LIGHT v24.9 - APP LOGIC (REFACTORED)
  * ===================================================================
  * Deskripsi Perubahan:
- * - ADDED: Implementasi semua rekomendasi perbaikan UI.
- * - FIXED: Tombol Preview Welcome kini mengirimkan mode & durasi yang dipilih untuk pratinjau instan.
- * - ADDED: Welcome animation baru sesuai permintaan.
- * - ADDED: Panel pratinjau warna di atas color wheel.
- * - ADDED: Input manual untuk RGB dan HEX pada color picker modal.
- * - FIXED: Memperbaiki kesalahan ketik pada fungsi renderModalColorSlots.
- * - MERGED: Konfigurasi dari config.js disatukan di sini.
- * - REFINED: Color picker tidak lagi muncul otomatis.
- * - REFINED: Slider kecerahan (value) di dalam color picker iro.js telah dihapus.
- * - ADDED: Panel pratinjau warna kini menampilkan kode Hex.
- * - FIXED: Fitur sinkronisasi dan kontrol per-sisi kini berfungsi.
- * - DISABLED: Fitur PWA (Service Worker) dinonaktifkan.
+ * - REFACTORED: Memisahkan logika jaringan ke dalam kelas ApiService dan
+ * WebSocketService untuk meningkatkan keterbacaan dan maintainabilitas.
+ * Kelas AeriApp kini berfokus pada manajemen status dan logika UI.
  * ===================================================================
  */
+
+// ============== BAGIAN 1: KELAS LAYANAN (SERVICES) ==============
+
+/**
+ * Menangani semua permintaan HTTP POST ke API firmware.
+ */
+class ApiService {
+  async post(endpoint, body, isJson = true) {
+    try {
+      const headers = isJson ? { "Content-Type": "application/json" } : {};
+      const bodyToSend = isJson ? JSON.stringify(body) : body;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: headers,
+        body: bodyToSend,
+        keepalive: isJson, // Gunakan keepalive untuk request pratinjau yang sering
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response;
+    } catch (error) {
+      console.error(`API POST to ${endpoint} failed:`, error);
+      // Lempar kembali error agar bisa ditangani oleh pemanggil
+      throw error;
+    }
+  }
+}
+
+/**
+ * Mengelola koneksi dan komunikasi WebSocket.
+ */
+class WebSocketService {
+  constructor(url) {
+    this.socket = null;
+    this.url = url;
+    this.onMessageHandler = () => {};
+    this.onConnectionStatusChange = () => {};
+  }
+
+  connect() {
+    this.socket = new WebSocket(this.url);
+
+    this.socket.onopen = () => {
+      console.log("WebSocket connected.");
+      this.onConnectionStatusChange(true);
+    };
+
+    this.socket.onclose = () => {
+      console.log("WebSocket disconnected. Reconnecting in 2s...");
+      this.onConnectionStatusChange(false);
+      setTimeout(() => this.connect(), 2000);
+    };
+
+    this.socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      this.socket.close();
+    };
+
+    this.socket.onmessage = (event) => {
+      this.onMessageHandler(event.data);
+    };
+  }
+
+  setOnMessageHandler(handler) {
+    this.onMessageHandler = handler;
+  }
+
+  setOnConnectionStatusChange(handler) {
+    this.onConnectionStatusChange = handler;
+  }
+
+  send(data) {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify(data));
+    } else {
+      console.warn("WebSocket not open. Message not sent:", data);
+    }
+  }
+}
+
+// ============== BAGIAN 2: KONFIGURASI & KELAS UTAMA ==============
 
 const AppConfig = {
   debounceDelay: 250,
   systems: ["alis", "shroud", "demon"],
-
   effectModes: [
     { name: "No Effect", value: 0, colorSlots: 0, hasSpeed: false },
     { name: "Solid", value: 1, colorSlots: 1, hasSpeed: false },
@@ -74,7 +146,6 @@ const AppConfig = {
     { name: "Bioluminescent Breath", value: 21 },
     { name: "ROG Cyberwave Dual-Tone", value: 22 },
   ],
-
   seinModes: [
     { name: "Sequential", value: 0, colorSlots: 1, hasSpeed: true },
     { name: "Pulsing Arrow", value: 1, colorSlots: 1, hasSpeed: true },
@@ -101,10 +172,12 @@ class AeriApp {
     };
     this.elements = {};
     this.modalColorPicker = null;
-    this.socket = null;
-    this.api = this.createApiHandler();
-    this.heartbeatTimer = null;
     this.debounceTimer = null;
+
+    // Inisialisasi layanan
+    this.api = new ApiService();
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    this.ws = new WebSocketService(`${wsProtocol}//${window.location.host}/ws`);
 
     this.config = config || {};
     this.config.modes = {
@@ -115,6 +188,33 @@ class AeriApp {
       welcome: (this.config.welcomeModes || []).map((m) => m.name),
     };
   }
+
+  async init() {
+    this.state.appState = this.generateDefaultState();
+    this.cacheInitialElements();
+    this.attachEventListeners();
+    this.initColorPicker();
+    this.renderFullUI();
+
+    // Setup handler untuk layanan WebSocket
+    this.ws.setOnMessageHandler(this.handleSocketMessage.bind(this));
+    this.ws.setOnConnectionStatusChange(this.setConnectionStatus.bind(this));
+    this.ws.connect();
+
+    await this.loadCustomWelcomeSequence();
+  }
+
+  handleSocketMessage(data) {
+    try {
+      const newState = JSON.parse(data);
+      this.state.appState = newState;
+      this.renderFullUI();
+    } catch (error) {
+      console.error("Failed to parse WS message", error);
+    }
+  }
+
+  // --- Metode UI dan Logika Aplikasi Lainnya (tidak berubah banyak) ---
 
   rgbToHex(r, g, b) {
     return (
@@ -149,46 +249,6 @@ class AeriApp {
     };
   }
 
-  async init() {
-    this.state.appState = this.generateDefaultState();
-    this.cacheInitialElements();
-    this.attachEventListeners();
-    this.initColorPicker();
-    this.renderFullUI();
-    this.connectWebSocket();
-    await this.loadCustomWelcomeSequence();
-  }
-
-  connectWebSocket() {
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
-    this.socket = new WebSocket(wsUrl);
-
-    this.socket.onopen = () => {
-      this.setConnectionStatus(true);
-    };
-
-    this.socket.onclose = () => {
-      this.setConnectionStatus(false);
-      setTimeout(() => this.connectWebSocket(), 2000);
-    };
-
-    this.socket.onerror = (e) => {
-      console.error("WS error", e);
-      this.socket.close();
-    };
-
-    this.socket.onmessage = (event) => {
-      try {
-        const newState = JSON.parse(event.data);
-        this.state.appState = newState;
-        this.renderFullUI();
-      } catch (error) {
-        console.error("Failed to parse WS message", error);
-      }
-    };
-  }
-
   initColorPicker() {
     this.modalColorPicker = new iro.ColorPicker(
       this.elements.colorPickerModal.container,
@@ -207,14 +267,12 @@ class AeriApp {
       if (this.state.isUpdatingFromInput) return;
       this.updateManualInputs(color);
 
-      // --- BLOK BARU UNTUK PRATINJAU LANGSUNG ---
       if (this.state.activeSystemForModal !== "editor") {
         clearTimeout(this.debounceTimer);
         this.debounceTimer = setTimeout(() => {
           this.sendColorPreview(color.rgb);
-        }, 50); // Delay 50ms, bisa disesuaikan
+        }, 50);
       }
-      // --- AKHIR BLOK BARU ---
     });
   }
 
@@ -445,40 +503,10 @@ class AeriApp {
     }
   }
 
-  createApiHandler() {
-    const post = async (endpoint, body, isJson = true) => {
-      if (!this.state.isConnected && endpoint !== "/preview-welcome") {
-        this.showToast(
-          "Mode Offline: Perubahan akan disimpan saat terhubung kembali",
-          "info"
-        );
-        return Promise.resolve({ ok: true, offline: true });
-      }
-      try {
-        const headers = isJson ? { "Content-Type": "application/json" } : {};
-        const bodyToSend = isJson ? JSON.stringify(body) : body;
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: headers,
-          body: bodyToSend,
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response;
-      } catch (error) {
-        console.error(`API POST to ${endpoint} failed:`, error);
-        this.setConnectionStatus(false);
-        throw error;
-      }
-    };
-    return { post };
-  }
-
   async sendColorPreview(color) {
-    if (!this.state.isConnected) return; // Jangan kirim jika offline
+    if (!this.state.isConnected) return;
 
-    const { activeSystemForModal, activeColorSlot, activeSide } = this.state;
+    const { activeSystemForModal, activeSide } = this.state;
     if (!activeSystemForModal) return;
 
     const payload = {
@@ -487,20 +515,13 @@ class AeriApp {
       b: color.b,
       system: activeSystemForModal,
       side: activeSide,
-      // Kita tidak butuh colorIndex di sini karena pratinjau akan
-      // diterapkan ke semua warna di efek untuk kesederhanaan.
     };
 
+    // Gunakan ApiService untuk mengirim pratinjau
     try {
-      // Kita gunakan 'keepalive' untuk performa yang lebih baik pada request berfrekuensi tinggi
-      await fetch("/preview-color", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      });
+      await this.api.post("/preview-color", payload);
     } catch (e) {
-      console.error("Preview request failed:", e);
+      this.setConnectionStatus(false);
     }
   }
 
@@ -658,9 +679,7 @@ class AeriApp {
   handleMasterPowerChange(e) {
     const value = e.target.checked;
     this.state.appState.masterPowerState = value;
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({ type: "master_power", value: value }));
-    }
+    this.ws.send({ type: "master_power", value: value });
   }
 
   handleTabClick(e) {
@@ -758,6 +777,7 @@ class AeriApp {
       .catch((err) => {
         console.error("Sync save failed:", err);
         this.showToast("Gagal menyimpan sinkronisasi", "error");
+        this.setConnectionStatus(false);
       })
       .finally(() => this.hideSavingIndicator());
   }
@@ -804,6 +824,7 @@ class AeriApp {
       }
     } catch (error) {
       this.showToast("Gagal menyimpan warna", "error");
+      this.setConnectionStatus(false);
     } finally {
       this.hideSavingIndicator();
     }
@@ -811,12 +832,13 @@ class AeriApp {
 
   handleColorPickerCancel() {
     this.hideModal("colorPickerModal");
-    // Kirim sinyal untuk membatalkan pratinjau jika bukan dari editor
     if (
       this.state.activeSystemForModal !== "editor" &&
       this.state.isConnected
     ) {
-      fetch("/cancel-preview", { method: "POST" });
+      this.api
+        .post("/cancel-preview", {})
+        .catch(() => this.setConnectionStatus(false));
     }
   }
 
@@ -831,6 +853,7 @@ class AeriApp {
       this.showToast("Jumlah LED berhasil disimpan", "success");
     } catch (error) {
       this.showToast("Gagal menyimpan", "error");
+      this.setConnectionStatus(false);
     } finally {
       this.hideSavingIndicator();
     }
@@ -847,6 +870,7 @@ class AeriApp {
       this.showToast("Animasi Welcome disimpan", "success");
     } catch (error) {
       this.showToast("Gagal menyimpan", "error");
+      this.setConnectionStatus(false);
     } finally {
       this.hideSavingIndicator();
     }
@@ -863,6 +887,7 @@ class AeriApp {
       this.showToast("Memulai preview...", "info");
     } catch (error) {
       this.showToast("Gagal memulai preview", "error");
+      this.setConnectionStatus(false);
     } finally {
       this.hideSavingIndicator();
     }
@@ -882,6 +907,7 @@ class AeriApp {
       this.showToast(`Preset '${name}' disimpan di slot ${slot}`, "success");
     } catch (error) {
       this.showToast("Gagal menyimpan preset", "error");
+      this.setConnectionStatus(false);
     } finally {
       this.hideSavingIndicator();
     }
@@ -895,6 +921,7 @@ class AeriApp {
       this.showToast(`Preset slot ${slot} dimuat`, "success");
     } catch (error) {
       this.showToast("Gagal memuat preset", "error");
+      this.setConnectionStatus(false);
     } finally {
       this.hideSavingIndicator();
     }
@@ -909,6 +936,7 @@ class AeriApp {
       setTimeout(() => window.location.reload(), 2000);
     } catch (error) {
       this.showToast("Gagal melakukan reset", "error");
+      this.setConnectionStatus(false);
     } finally {
       this.hideSavingIndicator();
     }
@@ -985,7 +1013,6 @@ class AeriApp {
     this.elements.savingIndicator.style.display = "none";
   }
 
-  // === FUNGSI UI BARU ===
   handleWelcomeModeChange(e) {
     const selectedMode = parseInt(e.target.value);
     const customEffectModeValue = 16;
@@ -1005,7 +1032,6 @@ class AeriApp {
     );
     this.elements.customWelcomeTotalDuration.textContent = `Total Durasi: ${totalDuration} ms`;
   }
-  // ======================
 
   async loadCustomWelcomeSequence() {
     try {
@@ -1213,6 +1239,7 @@ class AeriApp {
       this.showToast("Sekuens welcome kustom berhasil disimpan!", "success");
     } catch (error) {
       this.showToast("Gagal menyimpan sekuens", "error");
+      this.setConnectionStatus(false);
     } finally {
       this.hideSavingIndicator();
     }
