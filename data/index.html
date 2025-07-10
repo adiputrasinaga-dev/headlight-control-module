@@ -8,18 +8,13 @@
     />
     <meta name="description" content="AERI LIGHT Production Release" />
     <meta name="theme-color" id="theme-color-meta" content="#E60023" />
-    <!-- <link rel="manifest" href="/manifest.json" /> -->
-    <!-- PWA Dinonaktifkan -->
     <title>AERI LIGHT</title>
     <link rel="stylesheet" href="style.css" />
     <script src="iro.min.js"></script>
-    <!-- <link rel="apple-touch-icon" href="icons/icon-192x192.png" /> -->
-    <!-- PWA Dinonaktifkan -->
   </head>
   <body>
     <div id="toast-container"></div>
 
-    <!-- Modals -->
     <div id="reset-modal" class="modal-backdrop" style="display: none">
       <div class="modal-content">
         <h3>Konfirmasi Reset Pabrik</h3>
@@ -44,10 +39,57 @@
     <div id="color-picker-modal" class="modal-backdrop" style="display: none">
       <div class="modal-content modal-color-picker">
         <h3>Pilih Warna</h3>
+
+        <div id="color-preview-swatch"></div>
         <div
           id="modalColorPickerContainer"
           class="color-picker-container"
         ></div>
+
+        <div class="manual-color-inputs">
+          <div class="rgb-input-group">
+            <div class="control-group">
+              <label for="redInput">R</label>
+              <input
+                type="number"
+                id="redInput"
+                min="0"
+                max="255"
+                class="cyber-input"
+              />
+            </div>
+            <div class="control-group">
+              <label for="greenInput">G</label>
+              <input
+                type="number"
+                id="greenInput"
+                min="0"
+                max="255"
+                class="cyber-input"
+              />
+            </div>
+            <div class="control-group">
+              <label for="blueInput">B</label>
+              <input
+                type="number"
+                id="blueInput"
+                min="0"
+                max="255"
+                class="cyber-input"
+              />
+            </div>
+          </div>
+          <div class="control-group">
+            <label for="hexInput">HEX</label>
+            <input
+              type="text"
+              id="hexInput"
+              class="cyber-input"
+              maxlength="7"
+            />
+          </div>
+        </div>
+
         <div class="modal-actions">
           <button id="btnModalBatal" class="btn btn-secondary">Batal</button>
           <button id="btnModalSimpan" class="btn">Simpan</button>
@@ -76,9 +118,10 @@
 
           <div class="control-group">
             <label>Warna Efek</label>
-            <div id="modal-color-slots-container" class="color-bar-container">
-              <!-- Slot warna dinamis akan dirender di sini oleh JS -->
-            </div>
+            <div
+              id="modal-color-slots-container"
+              class="color-bar-container"
+            ></div>
           </div>
 
           <div class="control-group">
@@ -103,7 +146,6 @@
             Hapus
           </button>
           <button id="btnCancelStep" class="btn btn-secondary">Batal</button>
-          <!-- PERUBAHAN LABEL TOMBOL DI SINI -->
           <button id="btnSaveStep" class="btn">Simpan</button>
         </div>
       </div>
@@ -228,9 +270,10 @@
               Buat animasi welcome unik Anda dengan menambahkan langkah-langkah
               efek. Klik [+] untuk memulai.
             </p>
-            <div id="welcome-editor-container" class="welcome-editor-container">
-              <!-- Baris-baris editor akan dirender di sini oleh JS -->
-            </div>
+            <div
+              id="welcome-editor-container"
+              class="welcome-editor-container"
+            ></div>
             <div class="modal-actions">
               <button id="btnPreviewCustomWelcome" class="btn btn-secondary">
                 Preview Sekuens
@@ -285,9 +328,7 @@
             PENGATURAN LAMPU SEIN<span class="accordion-icon">›</span>
           </summary>
           <div class="panel-body">
-            <div id="sein-controls-container">
-              <!-- Kontrol sein akan dirender di sini oleh JavaScript -->
-            </div>
+            <div id="sein-controls-container"></div>
           </div>
         </details>
 

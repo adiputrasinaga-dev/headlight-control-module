@@ -9,6 +9,7 @@ struct SeinEffectParams
     uint16_t ledCount;
     uint8_t speed;
     const CRGB &color;
+    uint8_t brightness;
 };
 
 namespace SeinEffects

@@ -765,24 +765,41 @@ void jalankanModeLampu(LightConfig &config, LightState &sideState, CRGB *leds, u
     return;
   }
 
-  uint8_t originalBrightness = FastLED.getBrightness();
-  FastLED.setBrightness(sideState.kecerahan);
+  // Aturan baru: Jika kecerahan 0, matikan total lampu dan keluar.
+  if (sideState.kecerahan == 0)
+  {
+    fill_solid(leds, ledCount > 0 ? ledCount : MAX_LEDS, CRGB::Black);
+    return;
+  }
+
+  // Hapus panggilan global FastLED.setBrightness()
 
   uint8_t mapped_speed = map(sideState.kecepatan, 0, 100, 1, 15);
-  EffectParams params = {leds, (uint16_t)ledCount, animStep, mapped_speed, sideState.warna[0], sideState.warna[1], sideState.warna[2]};
+
+  // Kirim tingkat kecerahan sebagai parameter
+  EffectParams params = {leds, (uint16_t)ledCount, animStep, mapped_speed, sideState.warna[0], sideState.warna[1], sideState.warna[2], sideState.kecerahan};
+
   effectRegistry[sideState.mode](params);
 
-  FastLED.setBrightness(originalBrightness);
+  // Hapus pemulihan kecerahan original
 }
 
 void jalankanModeSein(bool isKiriActive, bool isKananActive)
 {
-  uint8_t originalBrightness = FastLED.getBrightness();
-  FastLED.setBrightness(seinConfig.kecerahan);
+  // Aturan baru: Jika kecerahan 0, matikan total lampu sein dan keluar dari fungsi.
+  if (seinConfig.kecerahan == 0)
+  {
+    fill_solid(ledsAlisKiri, ledCounts.alis, CRGB::Black);
+    fill_solid(ledsAlisKanan, ledCounts.alis, CRGB::Black);
+    return; // Hentikan eksekusi lebih lanjut
+  }
+
+  // Hapus penggunaan FastLED.setBrightness() global
 
   if (isKiriActive && seinConfig.mode < numSeinEffects)
   {
-    SeinEffectParams params = {ledsAlisKiri, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna};
+    // Kirim tingkat kecerahan ke dalam params
+    SeinEffectParams params = {ledsAlisKiri, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna, seinConfig.kecerahan};
     seinEffectRegistry[seinConfig.mode](params);
   }
   else
@@ -792,7 +809,8 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
 
   if (isKananActive && seinConfig.mode < numSeinEffects)
   {
-    SeinEffectParams params = {ledsAlisKanan, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna};
+    // Kirim tingkat kecerahan ke dalam params
+    SeinEffectParams params = {ledsAlisKanan, (uint16_t)ledCounts.sein, seinConfig.kecepatan, seinConfig.warna, seinConfig.kecerahan};
     seinEffectRegistry[seinConfig.mode](params);
   }
   else
@@ -800,7 +818,7 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
     fill_solid(ledsAlisKanan, ledCounts.alis, CRGB::Black);
   }
 
-  FastLED.setBrightness(originalBrightness);
+  // Hapus FastLED.setBrightness(originalBrightness)
 }
 
 void jalankanModeWelcome()
@@ -936,7 +954,22 @@ void runCustomWelcome(WelcomeEffectParams &params)
   {
     if (count > 0)
     {
-      EffectParams effectParams = {leds, count, (uint16_t)(millis() - stepStartTime), 10, step.colors[0], step.colors[1], step.colors[2]};
+      // Di welcome kustom, kecerahan tidak di-override, menggunakan dari state utama
+      uint8_t brightness = 255;
+      switch (step.targetSystem)
+      {
+      case 0:
+        brightness = (step.side != 2) ? alisConfig.stateKiri.kecerahan : alisConfig.stateKanan.kecerahan;
+        break;
+      case 1:
+        brightness = (step.side != 2) ? shroudConfig.stateKiri.kecerahan : shroudConfig.stateKanan.kecerahan;
+        break;
+      case 2:
+        brightness = (step.side != 2) ? demonConfig.stateKiri.kecerahan : demonConfig.stateKanan.kecerahan;
+        break;
+      }
+
+      EffectParams effectParams = {leds, count, (uint16_t)(millis() - stepStartTime), 10, step.colors[0], step.colors[1], step.colors[2], brightness};
       effectRegistry[step.effectMode](effectParams);
     }
   };

@@ -9,7 +9,9 @@
 // Mode 0: Solid
 void solid(EffectParams &params)
 {
-    fl::fill_solid(params.leds, params.ledCount, params.color1);
+    CRGB finalColor = params.color1;
+    finalColor.nscale8_video(params.brightness);
+    fl::fill_solid(params.leds, params.ledCount, finalColor);
 }
 
 // Mode 1: Breathing
@@ -18,6 +20,7 @@ void breathing(EffectParams &params)
     uint8_t scale = sin8(params.animStep * params.speed);
     CRGB scaledColor = params.color1;
     scaledColor.nscale8(scale);
+    scaledColor.nscale8_video(params.brightness);
     fl::fill_solid(params.leds, params.ledCount, scaledColor);
 }
 
@@ -25,29 +28,37 @@ void breathing(EffectParams &params)
 void rainbow(EffectParams &params)
 {
     fl::fill_rainbow(params.leds, params.ledCount, params.animStep * params.speed, 256 / params.ledCount);
+    for (int i = 0; i < params.ledCount; i++)
+    {
+        params.leds[i].nscale8_video(params.brightness);
+    }
 }
 
 // Mode 3: Comet
 void comet(EffectParams &params)
 {
+    CRGB finalColor = params.color1;
+    finalColor.nscale8_video(params.brightness);
     fl::fadeToBlackBy(params.leds, params.ledCount, 64);
     float p = fmod((float)params.animStep * params.speed * 0.5, (float)params.ledCount + 15);
     if ((int)p < params.ledCount)
     {
-        params.leds[(int)p] = params.color1;
+        params.leds[(int)p] = finalColor;
     }
 }
 
 // Mode 4: Cylon Scanner
 void cylonScanner(EffectParams &params)
 {
+    CRGB finalColor = params.color1;
+    finalColor.nscale8_video(params.brightness);
     fl::fadeToBlackBy(params.leds, params.ledCount, 64);
     int p = map(triwave8((params.animStep * params.speed) / 2), 0, 255, 0, params.ledCount - 4);
     if (p >= 0 && (p + 3) < params.ledCount)
     {
         for (int i = 0; i < 4; i++)
         {
-            params.leds[p + i] = params.color1;
+            params.leds[p + i] = finalColor;
         }
     }
 }
@@ -55,10 +66,15 @@ void cylonScanner(EffectParams &params)
 // Mode 5: Twinkle
 void twinkle(EffectParams &params)
 {
+    CRGB finalColor1 = params.color1;
+    finalColor1.nscale8_video(params.brightness);
+    CRGB finalColor2 = params.color2;
+    finalColor2.nscale8_video(params.brightness);
+
     fl::fadeToBlackBy(params.leds, params.ledCount, 40);
     if (random8() < 80)
     {
-        params.leds[random16(params.ledCount)] = (random8() < 128) ? params.color1 : params.color2;
+        params.leds[random16(params.ledCount)] = (random8() < 128) ? finalColor1 : finalColor2;
     }
 }
 
@@ -71,39 +87,55 @@ void fire(EffectParams &params)
     }
     if (random8() < 80)
     {
-        params.leds[random16(params.ledCount)] = fl::HeatColor(random8(160, 255));
+        uint8_t heat_val = random8(160, 255);
+        CRGB heat_color = fl::HeatColor(heat_val);
+        heat_color.nscale8_video(params.brightness);
+        params.leds[random16(params.ledCount)] = heat_color;
     }
 }
 
 // Mode 7: Gradient Shift
 void gradientShift(EffectParams &params)
 {
-    fl::fill_gradient_RGB(params.leds, params.ledCount, params.color1, params.color2, params.color3);
+    CRGB c1 = params.color1;
+    CRGB c2 = params.color2;
+    CRGB c3 = params.color3;
+    c1.nscale8_video(params.brightness);
+    c2.nscale8_video(params.brightness);
+    c3.nscale8_video(params.brightness);
+    fl::fill_gradient_RGB(params.leds, params.ledCount, c1, c2, c3);
 }
 
 // Mode 8: Plasma Ball
 void plasmaBall(EffectParams &params)
 {
+    CRGB finalColor1 = params.color1;
+    finalColor1.nscale8_video(params.brightness);
+    CRGB finalColor2 = params.color2;
+    finalColor2.nscale8_video(params.brightness);
+
     int plasma1 = sin8(params.animStep * params.speed + random8());
     int plasma2 = sin8(params.animStep * params.speed + random8() + 128);
     int plasma3 = sin8(params.animStep * 2 * params.speed + random8());
     for (int i = 0; i < params.ledCount; i++)
     {
         int val = sin8(i * 10 + plasma1) + sin8(i * 12 + plasma2) + sin8(i * 14 + plasma3);
-        params.leds[i] = fl::blend(CRGB::Black, params.color1, map(val, 0, 765, 0, 255));
-        params.leds[i] += params.color2.nscale8(32);
+        params.leds[i] = fl::blend(CRGB::Black, finalColor1, map(val, 0, 765, 0, 255));
+        params.leds[i] += finalColor2.nscale8(32);
     }
 }
 
 // Mode 9: Theater Chase
 void theaterChase(EffectParams &params)
 {
+    CRGB finalColor = params.color1;
+    finalColor.nscale8_video(params.brightness);
     uint8_t cycle = params.animStep * params.speed / 32;
     for (int i = 0; i < params.ledCount; i++)
     {
         if ((i + cycle) % 4 == 0)
         {
-            params.leds[i] = params.color1;
+            params.leds[i] = finalColor;
         }
         else
         {
@@ -115,27 +147,33 @@ void theaterChase(EffectParams &params)
 // Mode 10: Color Wipe
 void colorWipe(EffectParams &params)
 {
+    CRGB finalColor1 = params.color1;
+    finalColor1.nscale8_video(params.brightness);
+    CRGB finalColor2 = params.color2;
+    finalColor2.nscale8_video(params.brightness);
+
     uint16_t pos = map(params.animStep * params.speed, 0, 65535, 0, params.ledCount * 2);
     if (pos < params.ledCount)
     {
-        fl::fill_solid(params.leds, pos, params.color1);
-        fl::fill_solid(params.leds + pos, params.ledCount - pos, params.color2);
+        fl::fill_solid(params.leds, pos, finalColor1);
+        fl::fill_solid(params.leds + pos, params.ledCount - pos, finalColor2);
     }
     else
     {
-        fl::fill_solid(params.leds, params.ledCount, params.color1);
+        fl::fill_solid(params.leds, params.ledCount, finalColor1);
     }
 }
 
 // Mode 11: Pride
 void pride(EffectParams &params)
 {
+    uint8_t final_brightness = scale8_video(255, params.brightness);
     static uint16_t sPseudotime = 0;
     sPseudotime += params.speed * 8;
     for (uint16_t i = 0; i < params.ledCount; i++)
     {
         uint8_t hue = (i * 256 / params.ledCount) + (sPseudotime / 256);
-        params.leds[i] = CHSV(hue, 255, 255);
+        params.leds[i] = CHSV(hue, 255, final_brightness);
     }
 }
 
@@ -144,6 +182,10 @@ void pacifica_loop(EffectParams &params);
 void pacifica(EffectParams &params)
 {
     pacifica_loop(params);
+    for (int i = 0; i < params.ledCount; i++)
+    {
+        params.leds[i].nscale8_video(params.brightness);
+    }
 }
 
 CRGBPalette16 pacifica_palette_1 = {0x000507, 0x000409, 0x00030B, 0x00030D, 0x000210, 0x000212, 0x000114, 0x000117, 0x000019, 0x00001C, 0x000026, 0x000031, 0x00003B, 0x000046, 0x14554B, 0x28AA50};
@@ -181,9 +223,15 @@ void bouncingBalls(EffectParams &params)
     static float p[3] = {0, (float)params.ledCount / 2, (float)params.ledCount - 1};
     static CRGB colors[3];
     static unsigned long last_update = 0;
+
     colors[0] = params.color1;
     colors[1] = params.color2;
     colors[2] = params.color3;
+
+    colors[0].nscale8_video(params.brightness);
+    colors[1].nscale8_video(params.brightness);
+    colors[2].nscale8_video(params.brightness);
+
     if (millis() - last_update < 15)
         return;
     last_update = millis();
@@ -214,58 +262,68 @@ void bouncingBalls(EffectParams &params)
 // Mode 14: Meteor
 void meteor(EffectParams &params)
 {
+    CRGB finalColor = params.color1;
+    finalColor.nscale8_video(params.brightness);
     fl::fadeToBlackBy(params.leds, params.ledCount, 128);
     int pos = params.animStep * params.speed % (params.ledCount * 2);
     if (pos < params.ledCount)
     {
-        params.leds[pos] = params.color1;
+        params.leds[pos] = finalColor;
     }
 }
 
 // Mode 15: Confetti
 void confetti(EffectParams &params)
 {
+    uint8_t final_brightness = scale8_video(255, params.brightness);
     fl::fadeToBlackBy(params.leds, params.ledCount, 10);
     int pos = random16(params.ledCount);
-    params.leds[pos] += CHSV(params.animStep * params.speed + random8(64), 200, 255);
+    params.leds[pos] += CHSV(params.animStep * params.speed + random8(64), 200, final_brightness);
 }
 
 // Mode 16: Juggle
 void juggle(EffectParams &params)
 {
+    uint8_t final_brightness = scale8_video(255, params.brightness);
     fl::fadeToBlackBy(params.leds, params.ledCount, 20);
     for (int i = 0; i < 8; i++)
     {
         uint16_t pos = sin16(params.animStep * (i + 3) * params.speed + i * 10000) * (params.ledCount - 1) / 65535;
-        params.leds[pos] |= CHSV(i * 32, 255, 255);
+        params.leds[pos] |= CHSV(i * 32, 255, final_brightness);
     }
 }
 
 // Mode 17: Sinelon (Dot Bergerak)
 void sinelon(EffectParams &params)
 {
+    CRGB finalColor = params.color1;
+    finalColor.nscale8_video(params.brightness);
     fl::fadeToBlackBy(params.leds, params.ledCount, 20);
     int pos = beatsin16(13 * params.speed, 0, params.ledCount - 1);
-    params.leds[pos] += params.color1;
+    params.leds[pos] += finalColor;
 }
 
 // Mode 18: Noise
 void noise(EffectParams &params)
 {
+    uint8_t final_brightness = scale8_video(255, params.brightness);
     for (uint16_t i = 0; i < params.ledCount; i++)
     {
-        uint8_t noise = inoise8(i * 20, params.animStep * params.speed);
-        uint8_t hue = map(noise, 0, 255, 0, 255);
-        params.leds[i] = CHSV(hue, 255, 255);
+        uint8_t noise_val = inoise8(i * 20, params.animStep * params.speed);
+        uint8_t hue = map(noise_val, 0, 255, 0, 255);
+        params.leds[i] = CHSV(hue, 255, final_brightness);
     }
 }
 
 // Mode 19: Matrix
 void matrix(EffectParams &params)
 {
+    CRGB finalColor = CRGB::Green;
+    finalColor.nscale8_video(params.brightness);
+
     if (random8() < params.speed)
     {
-        params.leds[0] = CRGB::Green;
+        params.leds[0] = finalColor;
     }
     for (int i = params.ledCount - 1; i > 0; i--)
     {
@@ -277,6 +335,8 @@ void matrix(EffectParams &params)
 // Mode 20: Ripple
 void ripple(EffectParams &params)
 {
+    CRGB finalColor = params.color1;
+    finalColor.nscale8_video(params.brightness);
     fl::fadeToBlackBy(params.leds, params.ledCount, 10);
     static int center = 0;
     static uint8_t step = -1;
@@ -295,9 +355,9 @@ void ripple(EffectParams &params)
     {
         uint8_t intensity = 255 - (step * (256 / params.ledCount));
         if (center + step < params.ledCount)
-            params.leds[center + step] += params.color1.nscale8(intensity);
+            params.leds[center + step] += finalColor.nscale8(intensity);
         if (center - step >= 0)
-            params.leds[center - step] += params.color1.nscale8(intensity);
+            params.leds[center - step] += finalColor.nscale8(intensity);
         step++;
     }
     else
@@ -309,28 +369,35 @@ void ripple(EffectParams &params)
 // Mode 21: Larson Scanner (KITT)
 void larsonScanner(EffectParams &params)
 {
+    CRGB finalColor = params.color1;
+    finalColor.nscale8_video(params.brightness);
     fl::fadeToBlackBy(params.leds, params.ledCount, 40);
     int pos = beatsin16(10 * params.speed, 0, params.ledCount);
     if (pos > 0)
-        params.leds[pos - 1] = params.color1.nscale8(80);
-    params.leds[pos] = params.color1;
+        params.leds[pos - 1] = finalColor.nscale8(80);
+    params.leds[pos] = finalColor;
     if (pos < params.ledCount - 1)
-        params.leds[pos + 1] = params.color1.nscale8(80);
+        params.leds[pos + 1] = finalColor.nscale8(80);
 }
 
 // Mode 22: Two-Color Wipe
 void twoColorWipe(EffectParams &params)
 {
+    CRGB finalColor1 = params.color1;
+    finalColor1.nscale8_video(params.brightness);
+    CRGB finalColor2 = params.color2;
+    finalColor2.nscale8_video(params.brightness);
+
     int pos = map(triwave8(params.animStep * params.speed / 16), 0, 255, 0, params.ledCount);
     for (int i = 0; i < params.ledCount; i++)
     {
         if (i <= pos)
         {
-            params.leds[i] = params.color1;
+            params.leds[i] = finalColor1;
         }
         else
         {
-            params.leds[i] = params.color2;
+            params.leds[i] = finalColor2;
         }
     }
 }
@@ -338,11 +405,14 @@ void twoColorWipe(EffectParams &params)
 // Mode 23: Lightning
 void lightning(EffectParams &params)
 {
+    CRGB finalColor = CRGB::White;
+    finalColor.nscale8_video(params.brightness);
+
     fl::fadeToBlackBy(params.leds, params.ledCount, 100);
     if (random8() < params.speed)
     {
         int start = random16(params.ledCount);
         int len = random16(params.ledCount - start);
-        fl::fill_solid(params.leds + start, len, CRGB::White);
+        fl::fill_solid(params.leds + start, len, finalColor);
     }
 }

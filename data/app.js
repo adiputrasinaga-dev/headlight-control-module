@@ -3,6 +3,8 @@
  * AERI LIGHT v24.9 - APP LOGIC (MODAL & Z-INDEX FIX)
  * ===================================================================
  * Deskripsi Perubahan:
+ * - ADDED: Panel pratinjau warna di atas color wheel.
+ * - ADDED: Input manual untuk RGB dan HEX pada color picker modal.
  * - FIXED: Memperbaiki kesalahan ketik pada fungsi renderModalColorSlots
  * untuk memastikan color picker muncul saat mengedit langkah.
  * - MERGED: Konfigurasi dari config.js disatukan di sini.
@@ -87,6 +89,7 @@ class AeriApp {
       appState: null,
       customWelcomeSequence: [],
       activeEditorContext: { system: null, index: -1 },
+      isUpdatingFromPicker: false,
     };
     this.elements = {};
     this.modalColorPicker = null;
@@ -190,9 +193,12 @@ class AeriApp {
     );
 
     this.modalColorPicker.on("color:change", (color) => {
-      if (color.hsv.v < 100) {
-        color.hsv = { ...color.hsv, v: 100 };
-      }
+      // Perbarui pratinjau warna
+      this.elements.colorPickerModal.previewSwatch.style.backgroundColor =
+        color.hexString;
+
+      if (this.state.isUpdatingFromInput) return;
+      this.updateManualInputs(color);
     });
   }
 
@@ -208,8 +214,13 @@ class AeriApp {
       colorPickerModal: {
         backdrop: document.getElementById("color-picker-modal"),
         container: document.getElementById("modalColorPickerContainer"),
+        previewSwatch: document.getElementById("color-preview-swatch"),
         saveBtn: document.getElementById("btnModalSimpan"),
         cancelBtn: document.getElementById("btnModalBatal"),
+        redInput: document.getElementById("redInput"),
+        greenInput: document.getElementById("greenInput"),
+        blueInput: document.getElementById("blueInput"),
+        hexInput: document.getElementById("hexInput"),
       },
       statusIcon: document.getElementById("statusIcon"),
       statusText: document.getElementById("statusText"),
@@ -222,6 +233,7 @@ class AeriApp {
       syncSwitch: document.getElementById("syncSwitch"),
       systemSelector: document.querySelector(".system-selector"),
       sideSelector: document.querySelector(".side-selector"),
+      sideSelectorContainer: document.querySelector(".side-selector-container"),
       controlContainers: {
         alis: document.getElementById("alis-controls-container"),
         shroud: document.getElementById("shroud-controls-container"),
@@ -296,6 +308,15 @@ class AeriApp {
     this.elements.colorPickerModal.cancelBtn.addEventListener("click", () =>
       this.handleColorPickerCancel()
     );
+
+    // Event listeners untuk input manual
+    const { redInput, greenInput, blueInput, hexInput } =
+      this.elements.colorPickerModal;
+    redInput.addEventListener("input", () => this.handleManualRgbInput());
+    greenInput.addEventListener("input", () => this.handleManualRgbInput());
+    blueInput.addEventListener("input", () => this.handleManualRgbInput());
+    hexInput.addEventListener("input", (e) => this.handleManualHexInput(e));
+
     this.elements.resetModal.cancelBtn.addEventListener("click", () =>
       this.hideModal("resetModal")
     );
@@ -349,6 +370,51 @@ class AeriApp {
       this.handlePreviewWelcome()
     );
   }
+
+  // === FUNGSI BARU UNTUK INPUT WARNA MANUAL ===
+  updateManualInputs(color) {
+    const { redInput, greenInput, blueInput, hexInput } =
+      this.elements.colorPickerModal;
+    const { r, g, b } = color.rgb;
+
+    redInput.value = r;
+    greenInput.value = g;
+    blueInput.value = b;
+    hexInput.value = color.hexString.toUpperCase();
+  }
+
+  handleManualRgbInput() {
+    const { redInput, greenInput, blueInput } = this.elements.colorPickerModal;
+    let r = parseInt(redInput.value) || 0;
+    let g = parseInt(greenInput.value) || 0;
+    let b = parseInt(blueInput.value) || 0;
+
+    r = Math.max(0, Math.min(255, r));
+    g = Math.max(0, Math.min(255, g));
+    b = Math.max(0, Math.min(255, b));
+
+    this.state.isUpdatingFromInput = true;
+    this.modalColorPicker.color.rgb = { r, g, b };
+    this.elements.colorPickerModal.hexInput.value =
+      this.modalColorPicker.color.hexString.toUpperCase();
+    this.state.isUpdatingFromInput = false;
+  }
+
+  handleManualHexInput(e) {
+    const hexInput = e.target;
+    let hex = hexInput.value;
+
+    if (/^#?([0-9A-F]{3}){1,2}$/i.test(hex)) {
+      this.state.isUpdatingFromInput = true;
+      this.modalColorPicker.color.hexString = hex;
+      const { r, g, b } = this.modalColorPicker.color.rgb;
+      this.elements.colorPickerModal.redInput.value = r;
+      this.elements.colorPickerModal.greenInput.value = g;
+      this.elements.colorPickerModal.blueInput.value = b;
+      this.state.isUpdatingFromInput = false;
+    }
+  }
+  // ===========================================
 
   createApiHandler() {
     const post = async (endpoint, body, isJson = true) => {
@@ -617,6 +683,13 @@ class AeriApp {
 
   handleSystemChange(e) {
     this.state.activeSystem = e.target.value;
+
+    if (this.state.activeSystem === "sein") {
+      this.elements.sideSelectorContainer.style.display = "none";
+    } else {
+      this.elements.sideSelectorContainer.style.display = "block";
+    }
+
     Object.values(this.elements.controlContainers).forEach((container) => {
       if (container.id.includes(this.state.activeSystem)) {
         container.style.display = "block";
@@ -884,6 +957,12 @@ class AeriApp {
 
     this.state.originalColor = { r: color[0], g: color[1], b: color[2] };
     this.modalColorPicker.color.rgb = this.state.originalColor;
+
+    // Update pratinjau dan input manual saat picker ditampilkan
+    this.elements.colorPickerModal.previewSwatch.style.backgroundColor =
+      this.modalColorPicker.color.hexString;
+    this.updateManualInputs(this.modalColorPicker.color);
+
     this.showModal("colorPickerModal");
   }
 
@@ -1089,6 +1168,12 @@ class AeriApp {
       b: currentColor[2],
     };
     this.modalColorPicker.color.rgb = this.state.originalColor;
+
+    // Update pratinjau dan input manual saat picker ditampilkan
+    this.elements.colorPickerModal.previewSwatch.style.backgroundColor =
+      this.modalColorPicker.color.hexString;
+    this.updateManualInputs(this.modalColorPicker.color);
+
     this.showModal("colorPickerModal");
   }
 
