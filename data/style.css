@@ -1,14 +1,13 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.9 - STYLESHEET (FINAL)
+ * AERI LIGHT v24.10 - STYLESHEET (MODAL LAYOUT FIX)
  * ===================================================================
  * Deskripsi Perubahan:
+ * - FIXED: Tata letak modal "Atur Langkah Efek" diperbaiki dengan
+ * menambahkan padding dan jarak antar komponen.
+ * - FIXED: Tombol-tombol di dalam modal kini simetris.
  * - FIXED: Menambahkan z-index pada color picker modal agar selalu
  * muncul di atas modal lainnya.
- * - FIXED: Tombol pada grup radio (Tipe Target, Tipe Kontrol) kini
- * memiliki lebar yang sama persis untuk tampilan yang simetris.
- * - FIXED: Tata letak tombol pada semua modal, termasuk color picker,
- * diperbaiki menggunakan Flexbox untuk tampilan yang konsisten.
  * ===================================================================
  */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700&display=swap");
@@ -324,10 +323,18 @@ details[open] > summary {
 
 .modal-actions {
   display: flex;
-  justify-content: flex-end;
   gap: var(--space-md);
   width: 100%;
   margin-top: var(--space-lg);
+}
+
+.modal-actions .btn {
+  flex-grow: 1;
+  flex-basis: 0;
+}
+
+.modal-actions .btn-danger {
+  margin-right: auto;
 }
 
 select,
@@ -495,6 +502,18 @@ input:checked + .slider:before {
   align-items: center;
   backdrop-filter: blur(5px);
 }
+
+.modal-content {
+  padding: var(--space-xl);
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
 .modal-content.modal-color-picker {
   width: auto;
   min-width: 320px;
@@ -503,17 +522,16 @@ input:checked + .slider:before {
   flex-direction: column;
   align-items: center;
 }
-/* --- PERBAIKAN Z-INDEX DIMULAI DI SINI --- */
+
 #color-picker-modal {
   z-index: 5001;
 }
-/* --- PERBAIKAN Z-INDEX SELESAI DI SINI --- */
 #toast-container {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 5002; /* Pastikan toast di atas segalanya */
+  z-index: 5002;
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);

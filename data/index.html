@@ -59,37 +59,39 @@
       <div class="modal-content">
         <h3>Atur Langkah Efek</h3>
 
-        <div class="control-group">
-          <label for="modalEffectSelect">Pilih Efek</label>
-          <select id="modalEffectSelect" class="cyber-input"></select>
-        </div>
-
-        <div class="control-group">
-          <label for="modalSideSelect">Target Sisi</label>
-          <select id="modalSideSelect" class="cyber-input">
-            <option value="0">Keduanya</option>
-            <option value="1">Kiri</option>
-            <option value="2">Kanan</option>
-          </select>
-        </div>
-
-        <div class="control-group">
-          <label>Warna Efek</label>
-          <div id="modal-color-slots-container" class="color-bar-container">
-            <!-- Slot warna dinamis akan dirender di sini oleh JS -->
+        <div class="modal-body">
+          <div class="control-group">
+            <label for="modalEffectSelect">Pilih Efek</label>
+            <select id="modalEffectSelect" class="cyber-input"></select>
           </div>
-        </div>
 
-        <div class="control-group">
-          <label for="modalDurationInput">Durasi (milidetik)</label>
-          <input
-            type="number"
-            id="modalDurationInput"
-            class="cyber-input"
-            value="500"
-            min="50"
-            step="50"
-          />
+          <div class="control-group">
+            <label for="modalSideSelect">Target Sisi</label>
+            <select id="modalSideSelect" class="cyber-input">
+              <option value="0">Keduanya</option>
+              <option value="1">Kiri</option>
+              <option value="2">Kanan</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Warna Efek</label>
+            <div id="modal-color-slots-container" class="color-bar-container">
+              <!-- Slot warna dinamis akan dirender di sini oleh JS -->
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label for="modalDurationInput">Durasi (milidetik)</label>
+            <input
+              type="number"
+              id="modalDurationInput"
+              class="cyber-input"
+              value="500"
+              min="50"
+              step="50"
+            />
+          </div>
         </div>
 
         <div class="modal-actions">
@@ -101,7 +103,8 @@
             Hapus
           </button>
           <button id="btnCancelStep" class="btn btn-secondary">Batal</button>
-          <button id="btnSaveStep" class="btn">Simpan Langkah</button>
+          <!-- PERUBAHAN LABEL TOMBOL DI SINI -->
+          <button id="btnSaveStep" class="btn">Simpan</button>
         </div>
       </div>
     </div>
