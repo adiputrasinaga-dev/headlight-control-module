@@ -585,6 +585,8 @@ void handleSetLedCounts(AsyncWebServerRequest *request, JsonVariant &json)
   ledCounts.demon = obj["demon"] | ledCounts.demon;
   ledCounts.sein = obj["sein"] | ledCounts.sein;
   simpanPengaturan();
+  FastLED.clear();
+  FastLED.show();
   stateChanged = true;
   request->send(200, "text/plain", "OK");
 }
