@@ -4,6 +4,8 @@
 # Folder build dan dependensi PlatformIO
 .pio/
 
+temp/
+
 # File sistem operasi
 .DS_Store
 Thumbs.db
