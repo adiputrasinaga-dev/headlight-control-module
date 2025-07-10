@@ -1,14 +1,19 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.4 - FIRMWARE (SEIN BRIGHTNESS & UI REFINEMENTS)
+ * AERI LIGHT v24.6 - FIRMWARE (INDEPENDENT CONTROL & UX FIX)
  * ===================================================================
  * Deskripsi Perubahan:
- * - ADDED: Field 'kecerahan' ditambahkan ke SeinConfig.
- * - UPDATED: Logika di handleSetModeSein, (de)serialisasi, dan
- * jalankanModeSein diperbarui untuk mendukung kecerahan sein.
- * - REFINED: Logika loop utama disempurnakan agar lampu lain tetap
- * menyala saat sein aktif.
- * - ADDED: Fungsionalitas penuh untuk Editor Welcome Kustom.
+ * - RESTRUCTURED: `mode` dan `kecepatan` dipindahkan ke dalam
+ * struct `LightState` agar kontrol per-sisi (kiri/kanan)
+ * benar-benar independen.
+ * - FIXED: Logika di `handleSetModeLampu` dan (de)serialisasi
+ * disesuaikan dengan struktur data baru.
+ * - FIXED: Logika `jalankanModeLampu` disesuaikan untuk membaca
+ * mode dan kecepatan dari state per-sisi.
+ * - FIXED: Urutan logika di dalam loop() diubah agar animasi
+ * welcome selalu dijalankan saat boot.
+ * - CONFIG_VERSION dinaikkan ke 26 untuk memaksa reset pengaturan
+ * karena perubahan struktur data.
  * ===================================================================
  */
 
@@ -46,27 +51,29 @@ const char *AP_PASSWORD = "12345678";
 #define MAX_LEDS 250
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
-const uint8_t CONFIG_VERSION = 25; // Versi dinaikkan untuk reset otomatis karena perubahan struct
+const uint8_t CONFIG_VERSION = 26;
 
-// === State Management Structs ===
+// === STRUKTUR DATA BARU UNTUK KONTROL INDEPENDEN ===
 struct LightState
 {
   CRGB warna[3] = {CRGB::Red, CRGB::Blue, CRGB::Green};
   uint8_t kecerahan = 200;
+  uint8_t mode = 0;
+  uint8_t kecepatan = 50;
 };
+
 struct LightConfig
 {
   LightState stateKiri;
   LightState stateKanan;
-  uint8_t mode = 0;
-  uint8_t kecepatan = 50;
 };
+
 struct SeinConfig
 {
   uint8_t mode = 0;
   CRGB warna = CRGB::Orange;
   uint8_t kecepatan = 50;
-  uint8_t kecerahan = 255; // Default kecerahan penuh
+  uint8_t kecerahan = 255;
 };
 struct LedCountConfig
 {
@@ -243,7 +250,6 @@ void loop()
     }
     lastSeinState = true;
 
-    // Tetap jalankan lampu lain, sein akan menimpa strip alis
     jalankanModeLampu(shroudConfig, shroudConfig.stateKiri, ledsShroudKiri, ledCounts.shroud);
     jalankanModeLampu(shroudConfig, shroudConfig.stateKanan, ledsShroudKanan, ledCounts.shroud);
     jalankanModeLampu(demonConfig, demonConfig.stateKiri, ledsDemonKiri, ledCounts.demon);
@@ -258,13 +264,13 @@ void loop()
     }
     lastSeinState = false;
 
-    if (!masterPowerState)
-    {
-      FastLED.clear();
-    }
-    else if (isWelcomeActive)
+    if (isWelcomeActive)
     {
       jalankanModeWelcome();
+    }
+    else if (!masterPowerState)
+    {
+      FastLED.clear();
     }
     else
     {
@@ -336,10 +342,10 @@ void serializeState(JsonDocument &doc)
 
   auto serializeLight = [&](JsonObject &obj, LightConfig &cfg)
   {
-    obj["mode"] = cfg.mode;
-    obj["kecepatan"] = cfg.kecepatan;
     auto serializeSide = [&](JsonObject &sideObj, LightState &sideState)
     {
+      sideObj["mode"] = sideState.mode;
+      sideObj["kecepatan"] = sideState.kecepatan;
       sideObj["kecerahan"] = sideState.kecerahan;
       JsonArray warna = sideObj["warna"].to<JsonArray>();
       for (int i = 0; i < 3; i++)
@@ -355,6 +361,7 @@ void serializeState(JsonDocument &doc)
     JsonObject stateKanan = obj["stateKanan"].to<JsonObject>();
     serializeSide(stateKanan, cfg.stateKanan);
   };
+
   JsonObject alis = state["alis"].to<JsonObject>();
   serializeLight(alis, alisConfig);
   JsonObject shroud = state["shroud"].to<JsonObject>();
@@ -386,13 +393,13 @@ void deserializeLightConfig(JsonObject &lightObj, LightConfig &config)
 {
   if (lightObj.isNull())
     return;
-  config.mode = lightObj["mode"] | config.mode;
-  config.kecepatan = lightObj["kecepatan"] | config.kecepatan;
 
   auto deserializeSide = [&](JsonObject &sideObj, LightState &sideState)
   {
     if (sideObj.isNull())
       return;
+    sideState.mode = sideObj["mode"] | sideState.mode;
+    sideState.kecepatan = sideObj["kecepatan"] | sideState.kecepatan;
     sideState.kecerahan = sideObj["kecerahan"] | sideState.kecerahan;
     JsonArray warna = sideObj["warna"];
     if (!warna.isNull())
@@ -406,6 +413,7 @@ void deserializeLightConfig(JsonObject &lightObj, LightConfig &config)
       }
     }
   };
+
   JsonObject stateKiri = lightObj["stateKiri"];
   deserializeSide(stateKiri, config.stateKiri);
   JsonObject stateKanan = lightObj["stateKanan"];
@@ -481,17 +489,6 @@ void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, Light
   bool needsSave = false;
   String target = obj["target"] | "keduanya";
 
-  if (!obj["mode"].isNull())
-  {
-    config.mode = obj["mode"];
-    needsSave = true;
-  }
-  if (!obj["kecepatan"].isNull())
-  {
-    config.kecepatan = obj["kecepatan"];
-    needsSave = true;
-  }
-
   LightState *statesToUpdate[2] = {nullptr, nullptr};
   if (target == "kiri")
   {
@@ -511,6 +508,17 @@ void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, Light
   {
     if (statesToUpdate[i] == nullptr)
       continue;
+
+    if (!obj["mode"].isNull())
+    {
+      statesToUpdate[i]->mode = obj["mode"];
+      needsSave = true;
+    }
+    if (!obj["kecepatan"].isNull())
+    {
+      statesToUpdate[i]->kecepatan = obj["kecepatan"];
+      needsSave = true;
+    }
     if (!obj["kecerahan"].isNull())
     {
       int brightness_percent = obj["kecerahan"];
@@ -702,7 +710,7 @@ void handleGetPresetName(AsyncWebServerRequest *request)
       JsonObject state = p["state"];
       if (!state.isNull())
       {
-        int alisMode = state["alis"]["mode"] | 0;
+        int alisMode = state["alis"]["stateKiri"]["mode"] | 0; // Baca mode dari stateKiri
         if (alisMode < numEffects)
         {
           summary = "Alis: " + String(effectNames[alisMode]);
@@ -751,7 +759,7 @@ void handleSaveCustomWelcome(AsyncWebServerRequest *request, uint8_t *data, size
 
 void jalankanModeLampu(LightConfig &config, LightState &sideState, CRGB *leds, uint8_t ledCount)
 {
-  if (ledCount == 0 || config.mode >= numEffects)
+  if (ledCount == 0 || sideState.mode >= numEffects)
   {
     fill_solid(leds, ledCount > 0 ? ledCount : MAX_LEDS, CRGB::Black);
     return;
@@ -760,9 +768,9 @@ void jalankanModeLampu(LightConfig &config, LightState &sideState, CRGB *leds, u
   uint8_t originalBrightness = FastLED.getBrightness();
   FastLED.setBrightness(sideState.kecerahan);
 
-  uint8_t mapped_speed = map(config.kecepatan, 0, 100, 1, 15);
+  uint8_t mapped_speed = map(sideState.kecepatan, 0, 100, 1, 15);
   EffectParams params = {leds, (uint16_t)ledCount, animStep, mapped_speed, sideState.warna[0], sideState.warna[1], sideState.warna[2]};
-  effectRegistry[config.mode](params);
+  effectRegistry[sideState.mode](params);
 
   FastLED.setBrightness(originalBrightness);
 }
@@ -779,7 +787,7 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
   }
   else
   {
-    fill_solid(ledsAlisKiri, ledCounts.alis, CRGB::Black); // Clear if not active
+    fill_solid(ledsAlisKiri, ledCounts.alis, CRGB::Black);
   }
 
   if (isKananActive && seinConfig.mode < numSeinEffects)
@@ -789,7 +797,7 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
   }
   else
   {
-    fill_solid(ledsAlisKanan, ledCounts.alis, CRGB::Black); // Clear if not active
+    fill_solid(ledsAlisKanan, ledCounts.alis, CRGB::Black);
   }
 
   FastLED.setBrightness(originalBrightness);
@@ -950,7 +958,7 @@ void runCustomWelcome(WelcomeEffectParams &params)
 
 void simpanPengaturan()
 {
-  prefs.begin("config-v25", false);
+  prefs.begin("config-v26", false); // Versi dinaikkan
   prefs.putUChar("version", CONFIG_VERSION);
   prefs.putBytes("alis", &alisConfig, sizeof(LightConfig));
   prefs.putBytes("shroud", &shroudConfig, sizeof(LightConfig));
@@ -965,7 +973,7 @@ void simpanPengaturan()
 
 void bacaPengaturan()
 {
-  prefs.begin("config-v25", true);
+  prefs.begin("config-v26", true); // Versi dinaikkan
   if (prefs.getUChar("version", 0) != CONFIG_VERSION)
   {
     prefs.end();

@@ -1,10 +1,12 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.5 - STYLESHEET (CONTROL SPACING FIX)
+ * AERI LIGHT v24.6 - STYLESHEET (FINAL)
  * ===================================================================
  * Deskripsi Perubahan:
- * - ADDED: Aturan CSS untuk .effect-details-wrapper untuk menambah
- * jarak vertikal antara dropdown mode dan slider di bawahnya.
+ * - REFINED: Aturan CSS untuk .color-segment diubah untuk
+ * menampilkan teks kode Hex dengan jelas.
+ * - REFINED: .color-bar-container diubah menjadi flex-direction
+ * column untuk tata letak yang lebih baik.
  * ===================================================================
  */
 @import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700&display=swap");
@@ -261,12 +263,11 @@ details[open] > summary {
   align-items: baseline;
   padding: 0 var(--space-xs);
 }
-/* BARU: Aturan untuk wrapper detail efek */
 .effect-details-wrapper {
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg); /* Jarak antar slider */
-  margin-top: var(--space-lg); /* Jarak dari dropdown mode */
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
 }
 .btn {
   background-color: transparent;
@@ -575,6 +576,33 @@ input:checked + .slider:before {
   color: var(--error-color);
   font-style: italic;
   font-weight: 600;
+}
+
+.color-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.color-segment {
+  width: 100%;
+  height: 40px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Orbitron", sans-serif;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 0 5px #000, 0 0 5px #000;
+  font-size: 1.1em;
+}
+
+.color-segment:hover {
+  transform: scale(1.05);
 }
 
 /* STYLING UNTUK EDITOR WELCOME KUSTOM */

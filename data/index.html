@@ -8,11 +8,13 @@
     />
     <meta name="description" content="AERI LIGHT Production Release" />
     <meta name="theme-color" id="theme-color-meta" content="#E60023" />
-    <link rel="manifest" href="/manifest.json" />
+    <!-- <link rel="manifest" href="/manifest.json" /> -->
+    <!-- PWA Dinonaktifkan -->
     <title>AERI LIGHT</title>
     <link rel="stylesheet" href="style.css" />
     <script src="iro.min.js"></script>
-    <link rel="apple-touch-icon" href="icons/icon-192x192.png" />
+    <!-- <link rel="apple-touch-icon" href="icons/icon-192x192.png" /> -->
+    <!-- PWA Dinonaktifkan -->
   </head>
   <body>
     <div id="toast-container"></div>
@@ -375,20 +377,6 @@
       </div>
     </main>
 
-    <!-- PERBAIKAN: Menghapus komentar agar file config.js dimuat -->
-    <script src="config.js" defer></script>
     <script src="app.js" defer></script>
-    <script>
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker
-            .register("/service-worker.js")
-            .then((reg) => console.log("ServiceWorker registration successful"))
-            .catch((err) =>
-              console.log("ServiceWorker registration failed: ", err)
-            );
-        });
-      }
-    </script>
   </body>
 </html>

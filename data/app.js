@@ -1,14 +1,76 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.4 - MAIN APP LOGIC (UI & SEIN BRIGHTNESS REFINEMENT)
+ * AERI LIGHT v24.6 - APP LOGIC (FINAL)
  * ===================================================================
  * Deskripsi Perubahan:
- * - ADDED: Kontrol kecerahan ditambahkan untuk Lampu Sein.
- * - REFINED: Logika rendering disesuaikan untuk menampilkan slider
- * kecerahan pada panel pengaturan Sein.
- * - REFINED: Logika pengiriman data disederhanakan untuk event 'change'.
+ * - MERGED: Konfigurasi dari config.js disatukan di sini.
+ * - REFINED: Color picker tidak lagi muncul otomatis.
+ * - REFINED: Slider kecerahan (value) di dalam color picker iro.js
+ * telah dihapus untuk memisahkan pemilihan warna dan kecerahan.
+ * - ADDED: Panel pratinjau warna kini menampilkan kode Hex.
+ * - FIXED: Fitur sinkronisasi kini berfungsi dengan benar.
+ * - FIXED: Kontrol per-sisi kini sepenuhnya independen.
+ * - DISABLED: Fitur PWA (Service Worker) dinonaktifkan.
  * ===================================================================
  */
+
+const AppConfig = {
+  debounceDelay: 250,
+  systems: ["alis", "shroud", "demon"],
+
+  effectModes: [
+    { name: "Solid", value: 0, colorSlots: 1, hasSpeed: false },
+    { name: "Breathing", value: 1, colorSlots: 1, hasSpeed: true },
+    { name: "Rainbow", value: 2, colorSlots: 0, hasSpeed: true },
+    { name: "Comet", value: 3, colorSlots: 1, hasSpeed: true },
+    { name: "Cylon Scanner", value: 4, colorSlots: 1, hasSpeed: true },
+    { name: "Twinkle", value: 5, colorSlots: 2, hasSpeed: true },
+    { name: "Fire", value: 6, colorSlots: 0, hasSpeed: true },
+    { name: "Gradient Shift", value: 7, colorSlots: 3, hasSpeed: true },
+    { name: "Plasma Ball", value: 8, colorSlots: 2, hasSpeed: true },
+    { name: "Theater Chase", value: 9, colorSlots: 1, hasSpeed: true },
+    { name: "Color Wipe", value: 10, colorSlots: 2, hasSpeed: true },
+    { name: "Pride", value: 11, colorSlots: 0, hasSpeed: true },
+    { name: "Pacifica", value: 12, colorSlots: 0, hasSpeed: false },
+    { name: "Bouncing Balls", value: 13, colorSlots: 3, hasSpeed: true },
+    { name: "Meteor", value: 14, colorSlots: 1, hasSpeed: true },
+    { name: "Confetti", value: 15, colorSlots: 0, hasSpeed: true },
+    { name: "Juggle", value: 16, colorSlots: 0, hasSpeed: true },
+    { name: "Sinelon", value: 17, colorSlots: 1, hasSpeed: true },
+    { name: "Noise", value: 18, colorSlots: 0, hasSpeed: true },
+    { name: "Matrix", value: 19, colorSlots: 0, hasSpeed: true },
+    { name: "Ripple", value: 20, colorSlots: 1, hasSpeed: true },
+    { name: "Larson Scanner", value: 21, colorSlots: 1, hasSpeed: true },
+    { name: "Two-Color Wipe", value: 22, colorSlots: 2, hasSpeed: true },
+    { name: "Lightning", value: 23, colorSlots: 0, hasSpeed: true },
+  ],
+  welcomeModes: [
+    { name: "Power-On Scan", value: 0 },
+    { name: "Ignition Burst", value: 1 },
+    { name: "Spectrum Resolve", value: 2 },
+    { name: "Theater Chase", value: 3 },
+    { name: "Dual Comet", value: 4 },
+    { name: "Center Fill", value: 5 },
+    { name: "Charging", value: 6 },
+    { name: "Glitch", value: 7 },
+    { name: "Sonar", value: 8 },
+    { name: "Burning", value: 9 },
+    { name: "Warp Speed", value: 10 },
+    { name: "DNA", value: 11 },
+    { name: "Laser", value: 12 },
+    { name: "Heartbeat", value: 13 },
+    { name: "Liquid", value: 14 },
+    { name: "Spotlights", value: 15 },
+    { name: "Efek Kustom", value: 16 },
+  ],
+
+  seinModes: [
+    { name: "Sequential", value: 0, colorSlots: 1, hasSpeed: true },
+    { name: "Pulsing Arrow", value: 1, colorSlots: 1, hasSpeed: true },
+    { name: "Fill & Flush", value: 2, colorSlots: 1, hasSpeed: true },
+    { name: "Comet Trail", value: 3, colorSlots: 1, hasSpeed: true },
+  ],
+};
 
 class AeriApp {
   constructor(config) {
@@ -41,9 +103,18 @@ class AeriApp {
     };
   }
 
+  rgbToHex(r, g, b) {
+    return (
+      "#" +
+      ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()
+    );
+  }
+
   generateDefaultState() {
     const defaultSideState = {
       kecerahan: 200,
+      mode: 0,
+      kecepatan: 50,
       warna: [
         [255, 0, 0],
         [0, 0, 255],
@@ -51,8 +122,6 @@ class AeriApp {
       ],
     };
     const defaultLightState = {
-      mode: 0,
-      kecepatan: 50,
       stateKiri: { ...defaultSideState },
       stateKanan: { ...defaultSideState },
     };
@@ -107,20 +176,23 @@ class AeriApp {
     };
   }
 
-  startHeartbeat() {
-    this.resetHeartbeat();
-  }
+  initColorPicker() {
+    this.modalColorPicker = new iro.ColorPicker(
+      this.elements.colorPickerModal.container,
+      {
+        width: 280,
+        color: "#ff0000",
+        borderWidth: 1,
+        borderColor: "#fff",
+        layout: [{ component: iro.ui.Wheel }],
+      }
+    );
 
-  stopHeartbeat() {
-    clearTimeout(this.heartbeatTimer);
-  }
-
-  resetHeartbeat() {
-    clearTimeout(this.heartbeatTimer);
-    this.heartbeatTimer = setTimeout(() => {
-      console.log("Heartbeat failed. Closing connection.");
-      this.socket.close();
-    }, 10000);
+    this.modalColorPicker.on("color:change", (color) => {
+      if (color.hsv.v < 100) {
+        color.hsv = { ...color.hsv, v: 100 };
+      }
+    });
   }
 
   cacheInitialElements() {
@@ -277,35 +349,13 @@ class AeriApp {
     );
   }
 
-  initColorPicker() {
-    this.modalColorPicker = new iro.ColorPicker(
-      this.elements.colorPickerModal.container,
-      {
-        width: 280,
-        color: "#ff0000",
-        borderWidth: 1,
-        borderColor: "#fff",
-        layout: [
-          { component: iro.ui.Wheel },
-          { component: iro.ui.Slider, options: { sliderType: "value" } },
-        ],
-      }
-    );
-    this.modalColorPicker.on("color:change", (color) => {
-      // This listener is now generic and doesn't send data directly.
-      // The save button will handle the logic.
-    });
-  }
-
   createApiHandler() {
     const post = async (endpoint, body, isJson = true) => {
-      // Offline check is now more for preventing network errors than blocking UI
       if (!this.state.isConnected && endpoint !== "/preview-welcome") {
         this.showToast(
           "Mode Offline: Perubahan akan disimpan saat terhubung kembali",
           "info"
         );
-        // In a more advanced app, you'd queue this request. For now, we just inform.
         return Promise.resolve({ ok: true, offline: true });
       }
       try {
@@ -322,7 +372,7 @@ class AeriApp {
         return response;
       } catch (error) {
         console.error(`API POST to ${endpoint} failed:`, error);
-        this.setConnectionStatus(false); // Assume connection lost on network error
+        this.setConnectionStatus(false);
         throw error;
       }
     };
@@ -342,8 +392,6 @@ class AeriApp {
       this.showToast("Koneksi terputus. Anda dalam mode offline.", "error");
     } else {
       this.showToast("Terhubung ke AERI LIGHT", "success");
-      // On re-connection, you might want to re-sync state
-      // For now, the next action will trigger a state update from the device
     }
   }
 
@@ -351,11 +399,9 @@ class AeriApp {
     if (!this.state.appState) return;
     this.elements.masterPowerSwitch.checked =
       this.state.appState.masterPowerState;
-    // Render sistem di tab Kontrol
     this.renderSystem("alis");
     this.renderSystem("shroud");
     this.renderSystem("demon");
-    // Render pengaturan
     this.renderSettings();
     this.updateSyncPanelHighlight();
     this.populatePresetSlots();
@@ -366,14 +412,13 @@ class AeriApp {
     const container = this.elements.controlContainers[system];
     if (!container || !this.state.appState[system]) return;
 
-    const state = this.state.appState[system];
+    const systemState = this.state.appState[system];
     const isLightSystem = system !== "sein";
     const configModes = this.config.modes[system] || [];
 
-    const sideState =
-      isLightSystem && this.state.activeSide === "kanan"
-        ? state.stateKanan
-        : state.stateKiri;
+    const activeSideKey =
+      this.state.activeSide === "kanan" ? "stateKanan" : "stateKiri";
+    const sideState = isLightSystem ? systemState[activeSideKey] : systemState;
 
     let html = `
       <div class="control-group">
@@ -383,7 +428,7 @@ class AeriApp {
             .map(
               (mode, index) =>
                 `<option value="${index}" ${
-                  state.mode === index ? "selected" : ""
+                  sideState.mode === index ? "selected" : ""
                 }>${mode}</option>`
             )
             .join("")}
@@ -391,62 +436,69 @@ class AeriApp {
       </div>
       <div class="effect-details-wrapper">`;
 
-    if (isLightSystem || system === "sein") {
-      const currentBrightness =
-        system === "sein" ? state.kecerahan : sideState.kecerahan;
-      const brightnessPercent = Math.round((currentBrightness / 255) * 100);
+    const effectConfig = isLightSystem
+      ? this.config.effectModes.find((e) => e.value === sideState.mode)
+      : this.config.seinModes.find((e) => e.value === sideState.mode);
+
+    const brightnessPercent = Math.round((sideState.kecerahan / 255) * 100);
+    html += `
+          <div class="control-group">
+            <div class="slider-label-container">
+              <label for="brightness-${system}">Kecerahan</label>
+              <span id="brightness-value-${system}" class="panel-info">${brightnessPercent}%</span>
+            </div>
+            <input type="range" id="brightness-${system}" min="0" max="100" value="${brightnessPercent}">
+          </div>`;
+
+    if (effectConfig && effectConfig.hasSpeed) {
       html += `
             <div class="control-group">
               <div class="slider-label-container">
-                <label for="brightness-${system}">Kecerahan</label>
-                <span id="brightness-value-${system}" class="panel-info">${brightnessPercent}%</span>
+                <label for="speed-${system}">Kecepatan</label>
+                <span id="speed-value-${system}" class="panel-info">${sideState.kecepatan}%</span>
               </div>
-              <input type="range" id="brightness-${system}" min="0" max="100" value="${brightnessPercent}">
+              <input type="range" id="speed-${system}" min="0" max="100" value="${sideState.kecepatan}">
             </div>`;
     }
 
-    html += `
-        <div class="control-group">
-          <div class="slider-label-container">
-            <label for="speed-${system}">Kecepatan</label>
-            <span id="speed-value-${system}" class="panel-info">${
-      state.kecepatan
-    }%</span>
-          </div>
-          <input type="range" id="speed-${system}" min="0" max="100" value="${
-      state.kecepatan
-    }">
-        </div>
-        <div class="control-group">
-          <label>Warna</label>
-          <div class="color-bar-container">
-            ${
-              isLightSystem
-                ? sideState.warna
-                    .map((color, index) =>
-                      this.renderColorSegment(system, index)
-                    )
-                    .join("")
-                : this.renderColorSegment(system, 0)
-            }
-          </div>
-        </div>
-      </div>`;
+    if (effectConfig && effectConfig.colorSlots > 0) {
+      html += `
+            <div class="control-group">
+              <label>Warna</label>
+              <div class="color-bar-container">
+                ${
+                  isLightSystem
+                    ? sideState.warna
+                        .slice(0, effectConfig.colorSlots)
+                        .map((color, index) =>
+                          this.renderColorSegment(system, index)
+                        )
+                        .join("")
+                    : this.renderColorSegment(system, 0)
+                }
+              </div>
+            </div>`;
+    }
+
+    html += `</div>`;
 
     container.innerHTML = html;
     this.attachDynamicEventListeners(system);
   }
 
   renderColorSegment(system, index) {
-    const state = this.state.appState[system];
+    const systemState = this.state.appState[system];
     const isLightSystem = system !== "sein";
-    const sideState =
-      isLightSystem && this.state.activeSide === "kanan"
-        ? state.stateKanan
-        : state.stateKiri;
-    const color = isLightSystem ? sideState.warna[index] : state.warna;
+
+    const activeSideKey =
+      this.state.activeSide === "kanan" ? "stateKanan" : "stateKiri";
+    const sideState = isLightSystem ? systemState[activeSideKey] : null;
+
+    const color = isLightSystem ? sideState.warna[index] : systemState.warna;
     const rgb = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
-    return `<div class="color-segment" style="background-color: ${rgb};" data-system="${system}" data-color-index="${index}"></div>`;
+    const hex = this.rgbToHex(color[0], color[1], color[2]);
+
+    return `<div class="color-segment" style="background-color: ${rgb};" data-system="${system}" data-color-index="${index}">${hex}</div>`;
   }
 
   renderSettings() {
@@ -476,10 +528,26 @@ class AeriApp {
     if (!container) return;
 
     const modeEl = container.querySelector(`#mode-${system}`);
-    if (modeEl)
-      modeEl.addEventListener("change", (e) =>
-        this.handleControlSave(system, "mode", e.target.value)
-      );
+    if (modeEl) {
+      modeEl.addEventListener("change", (e) => {
+        const newModeValue = parseInt(e.target.value);
+
+        this.handleControlSave(system, "mode", newModeValue);
+
+        const activeSideKey =
+          this.state.activeSide === "kanan" ? "stateKanan" : "stateKiri";
+        if (this.state.appState[system]) {
+          if (this.state.activeSide === "keduanya") {
+            this.state.appState[system].stateKiri.mode = newModeValue;
+            this.state.appState[system].stateKanan.mode = newModeValue;
+          } else {
+            this.state.appState[system][activeSideKey].mode = newModeValue;
+          }
+        }
+
+        this.renderSystem(system);
+      });
+    }
 
     const speedEl = container.querySelector(`#speed-${system}`);
     if (speedEl) {
@@ -589,7 +657,6 @@ class AeriApp {
   }
 
   handleControlPreview(system, key, value) {
-    // Update UI immediately for better feedback
     const valueEl = document.getElementById(`${key}-value-${system}`);
     if (valueEl) {
       valueEl.textContent = `${value}%`;
@@ -602,17 +669,20 @@ class AeriApp {
         ? ["alis", "shroud", "demon"]
         : [system];
 
-    let payload = {};
-    if (system === "sein") {
-      payload = { [key]: parseInt(value) };
-    } else {
-      payload = { [key]: parseInt(value), target: this.state.activeSide };
-    }
+    const intValue = parseInt(value);
 
     this.showSavingIndicator();
-    this.api
-      .post(`/set-mode-${system}`, payload)
-      .catch((err) => this.showToast("Gagal menyimpan", "error"))
+
+    const promises = systemsToUpdate.map((sys) => {
+      let payload = { [key]: intValue, target: this.state.activeSide };
+      return this.api.post(`/set-mode-${sys}`, payload);
+    });
+
+    Promise.all(promises)
+      .catch((err) => {
+        console.error("Sync save failed:", err);
+        this.showToast("Gagal menyimpan sinkronisasi", "error");
+      })
       .finally(() => this.hideSavingIndicator());
   }
 
@@ -795,12 +865,17 @@ class AeriApp {
   showColorPicker(system, colorIndex) {
     this.state.activeSystemForModal = system;
     this.state.activeColorSlot = colorIndex;
-    const state = this.state.appState[system];
-    const sideState =
-      this.state.activeSide === "kanan" && system !== "sein"
-        ? state.stateKanan
-        : state.stateKiri;
-    const color = system === "sein" ? state.warna : sideState.warna[colorIndex];
+
+    const systemState = this.state.appState[system];
+    const isLightSystem = system !== "sein";
+    const activeSideKey =
+      this.state.activeSide === "kanan" ? "stateKanan" : "stateKiri";
+    const sideState = isLightSystem ? systemState[activeSideKey] : null;
+
+    const color = isLightSystem
+      ? sideState.warna[colorIndex]
+      : systemState.warna;
+
     this.state.originalColor = { r: color[0], g: color[1], b: color[2] };
     this.modalColorPicker.color.rgb = this.state.originalColor;
     this.showModal("colorPickerModal");
@@ -839,7 +914,7 @@ class AeriApp {
 
   renderWelcomeEditor() {
     const container = this.elements.welcomeEditorContainer;
-    container.innerHTML = ""; // Bersihkan kontainer
+    container.innerHTML = "";
 
     const systems = [
       { name: "Alis", key: 0 },
@@ -1027,10 +1102,8 @@ class AeriApp {
     };
 
     if (stepIndex > -1) {
-      // Update step yang ada
       this.state.customWelcomeSequence[stepIndex] = newStep;
     } else {
-      // Tambah step baru
       this.state.customWelcomeSequence.push(newStep);
     }
 
@@ -1066,6 +1139,11 @@ class AeriApp {
 
 // Initialize the app
 document.addEventListener("DOMContentLoaded", () => {
-  const app = new AeriApp(window.AppConfig);
+  const app = new AeriApp(AppConfig);
   app.init();
 });
+
+// PWA dinonaktifkan sesuai permintaan
+// function registerServiceWorker() { ... }
+// function showUpdateNotification() { ... }
+// registerServiceWorker();
