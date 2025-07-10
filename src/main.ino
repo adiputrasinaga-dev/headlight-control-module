@@ -216,6 +216,7 @@ void handleCancelPreview(AsyncWebServerRequest *request)
   request->send(200, "text/plain", "OK");
 }
 
+// FUNGSI BARU: Inisialisasi Hardware
 void setupHardware()
 {
   FastLED.addLeds<LED_TYPE, PIN_ALIS_KIRI, COLOR_ORDER>(ledsAlisKiri, MAX_LEDS);
@@ -228,6 +229,7 @@ void setupHardware()
   pinMode(PIN_INPUT_SEIN_KANAN, INPUT_PULLUP);
 }
 
+// FUNGSI BARU: Inisialisasi Web Server dan Endpoint
 void setupWebServer()
 {
   ws.onEvent(onWsEvent);
@@ -291,6 +293,7 @@ void setupWebServer()
   server.begin();
 }
 
+// FUNGSI SETUP UTAMA (lebih bersih):
 void setup()
 {
   Serial.begin(115200);
