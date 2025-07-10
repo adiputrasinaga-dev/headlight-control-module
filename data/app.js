@@ -104,6 +104,7 @@ class AeriApp {
     this.socket = null;
     this.api = this.createApiHandler();
     this.heartbeatTimer = null;
+    this.debounceTimer = null;
 
     this.config = config || {};
     this.config.modes = {
@@ -205,6 +206,15 @@ class AeriApp {
         color.hexString;
       if (this.state.isUpdatingFromInput) return;
       this.updateManualInputs(color);
+
+      // --- BLOK BARU UNTUK PRATINJAU LANGSUNG ---
+      if (this.state.activeSystemForModal !== "editor") {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = setTimeout(() => {
+          this.sendColorPreview(color.rgb);
+        }, 50); // Delay 50ms, bisa disesuaikan
+      }
+      // --- AKHIR BLOK BARU ---
     });
   }
 
@@ -463,6 +473,35 @@ class AeriApp {
       }
     };
     return { post };
+  }
+
+  async sendColorPreview(color) {
+    if (!this.state.isConnected) return; // Jangan kirim jika offline
+
+    const { activeSystemForModal, activeColorSlot, activeSide } = this.state;
+    if (!activeSystemForModal) return;
+
+    const payload = {
+      r: color.r,
+      g: color.g,
+      b: color.b,
+      system: activeSystemForModal,
+      side: activeSide,
+      // Kita tidak butuh colorIndex di sini karena pratinjau akan
+      // diterapkan ke semua warna di efek untuk kesederhanaan.
+    };
+
+    try {
+      // Kita gunakan 'keepalive' untuk performa yang lebih baik pada request berfrekuensi tinggi
+      await fetch("/preview-color", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      });
+    } catch (e) {
+      console.error("Preview request failed:", e);
+    }
   }
 
   setConnectionStatus(isConnected) {
@@ -772,6 +811,13 @@ class AeriApp {
 
   handleColorPickerCancel() {
     this.hideModal("colorPickerModal");
+    // Kirim sinyal untuk membatalkan pratinjau jika bukan dari editor
+    if (
+      this.state.activeSystemForModal !== "editor" &&
+      this.state.isConnected
+    ) {
+      fetch("/cancel-preview", { method: "POST" });
+    }
   }
 
   async handleSaveLedCounts() {
