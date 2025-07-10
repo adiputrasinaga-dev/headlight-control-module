@@ -1,15 +1,16 @@
 /*
  * ===================================================================
- * AERI LIGHT v24.6 - APP LOGIC (FINAL)
+ * AERI LIGHT v24.9 - APP LOGIC (MODAL & Z-INDEX FIX)
  * ===================================================================
  * Deskripsi Perubahan:
+ * - FIXED: Memperbaiki kesalahan ketik pada fungsi renderModalColorSlots
+ * untuk memastikan color picker muncul saat mengedit langkah.
  * - MERGED: Konfigurasi dari config.js disatukan di sini.
  * - REFINED: Color picker tidak lagi muncul otomatis.
  * - REFINED: Slider kecerahan (value) di dalam color picker iro.js
- * telah dihapus untuk memisahkan pemilihan warna dan kecerahan.
+ * telah dihapus.
  * - ADDED: Panel pratinjau warna kini menampilkan kode Hex.
- * - FIXED: Fitur sinkronisasi kini berfungsi dengan benar.
- * - FIXED: Kontrol per-sisi kini sepenuhnya independen.
+ * - FIXED: Fitur sinkronisasi dan kontrol per-sisi kini berfungsi.
  * - DISABLED: Fitur PWA (Service Worker) dinonaktifkan.
  * ===================================================================
  */
@@ -693,6 +694,11 @@ class AeriApp {
       const colorArray = [newColor.r, newColor.g, newColor.b];
       targetElement.style.backgroundColor = `rgb(${colorArray.join(",")})`;
       targetElement.dataset.colorValue = JSON.stringify(colorArray);
+      targetElement.textContent = this.rgbToHex(
+        newColor.r,
+        newColor.g,
+        newColor.b
+      );
       this.hideModal("colorPickerModal");
       return;
     }
@@ -1056,11 +1062,14 @@ class AeriApp {
       if (existingStep && existingStep.colors && existingStep.colors[i]) {
         color = existingStep.colors[i];
       }
+
       const colorSegment = document.createElement("div");
       colorSegment.className = "color-segment";
       colorSegment.style.backgroundColor = `rgb(${color.join(",")})`;
       colorSegment.dataset.colorIndex = i;
       colorSegment.dataset.colorValue = JSON.stringify(color);
+
+      colorSegment.textContent = this.rgbToHex(color[0], color[1], color[2]);
 
       colorSegment.addEventListener("click", (e) => {
         const el = e.currentTarget;
@@ -1142,8 +1151,3 @@ document.addEventListener("DOMContentLoaded", () => {
   const app = new AeriApp(AppConfig);
   app.init();
 });
-
-// PWA dinonaktifkan sesuai permintaan
-// function registerServiceWorker() { ... }
-// function showUpdateNotification() { ... }
-// registerServiceWorker();
