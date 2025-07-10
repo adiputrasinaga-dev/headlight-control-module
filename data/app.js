@@ -3,14 +3,15 @@
  * AERI LIGHT v24.9 - APP LOGIC (MODAL & Z-INDEX FIX)
  * ===================================================================
  * Deskripsi Perubahan:
+ * - ADDED: Navigasi mobile kini dapat ditutup dengan mengklik di luar area menu.
+ * - FIXED: Tombol Preview Welcome kini mengirimkan mode & durasi yang dipilih untuk pratinjau instan.
+ * - ADDED: Welcome animation baru sesuai permintaan.
  * - ADDED: Panel pratinjau warna di atas color wheel.
  * - ADDED: Input manual untuk RGB dan HEX pada color picker modal.
- * - FIXED: Memperbaiki kesalahan ketik pada fungsi renderModalColorSlots
- * untuk memastikan color picker muncul saat mengedit langkah.
+ * - FIXED: Memperbaiki kesalahan ketik pada fungsi renderModalColorSlots.
  * - MERGED: Konfigurasi dari config.js disatukan di sini.
  * - REFINED: Color picker tidak lagi muncul otomatis.
- * - REFINED: Slider kecerahan (value) di dalam color picker iro.js
- * telah dihapus.
+ * - REFINED: Slider kecerahan (value) di dalam color picker iro.js telah dihapus.
  * - ADDED: Panel pratinjau warna kini menampilkan kode Hex.
  * - FIXED: Fitur sinkronisasi dan kontrol per-sisi kini berfungsi.
  * - DISABLED: Fitur PWA (Service Worker) dinonaktifkan.
@@ -65,6 +66,12 @@ const AppConfig = {
     { name: "Liquid", value: 14 },
     { name: "Spotlights", value: 15 },
     { name: "Efek Kustom", value: 16 },
+    { name: "Dynamic Gradient Sweep", value: 17 },
+    { name: "Sequential Startup Scan", value: 18 },
+    { name: "Fluid Particle Swirl", value: 19 },
+    { name: "Ambient Screen/Audio Sync Pulse", value: 20 },
+    { name: "Bioluminescent Breath", value: 21 },
+    { name: "ROG Cyberwave Dual-Tone", value: 22 },
   ],
 
   seinModes: [
@@ -293,6 +300,18 @@ class AeriApp {
     this.elements.hamburgerBtn.addEventListener("click", () =>
       this.toggleMobileMenu()
     );
+
+    // KODE BARU: Menutup navigasi saat klik di luar
+    document.addEventListener("click", (e) => {
+      if (
+        !this.elements.mobileMenu.contains(e.target) &&
+        !this.elements.hamburgerBtn.contains(e.target) &&
+        this.elements.mobileMenu.classList.contains("open")
+      ) {
+        this.toggleMobileMenu();
+      }
+    });
+
     this.elements.systemSelector.addEventListener("change", (e) =>
       this.handleSystemChange(e)
     );
@@ -850,7 +869,12 @@ class AeriApp {
   async handlePreviewWelcome() {
     this.showSavingIndicator();
     try {
-      await this.api.post("/preview-welcome", {});
+      // Kirim mode dan durasi yang sedang dipilih untuk pratinjau
+      const payload = {
+        mode: parseInt(this.elements.welcomeModeSelect.value),
+        durasi: parseInt(this.elements.welcomeDurationInput.value),
+      };
+      await this.api.post("/preview-welcome", payload);
       this.showToast("Memulai preview...", "info");
     } catch (error) {
       this.showToast("Gagal memulai preview", "error");

@@ -3,17 +3,14 @@
  * AERI LIGHT v24.6 - FIRMWARE (INDEPENDENT CONTROL & UX FIX)
  * ===================================================================
  * Deskripsi Perubahan:
- * - RESTRUCTURED: `mode` dan `kecepatan` dipindahkan ke dalam
- * struct `LightState` agar kontrol per-sisi (kiri/kanan)
- * benar-benar independen.
- * - FIXED: Logika di `handleSetModeLampu` dan (de)serialisasi
- * disesuaikan dengan struktur data baru.
- * - FIXED: Logika `jalankanModeLampu` disesuaikan untuk membaca
- * mode dan kecepatan dari state per-sisi.
- * - FIXED: Urutan logika di dalam loop() diubah agar animasi
- * welcome selalu dijalankan saat boot.
- * - CONFIG_VERSION dinaikkan ke 26 untuk memaksa reset pengaturan
- * karena perubahan struktur data.
+ * - ADDED: Tambahan delay(1) di loop utama untuk stabilitas Wi-Fi.
+ * - FIXED: Tombol Preview Welcome kini menerima mode & durasi untuk pratinjau instan.
+ * - ADDED: Welcome animation baru sesuai permintaan.
+ * - RESTRUCTURED: `mode` dan `kecepatan` dipindahkan ke dalam struct `LightState`.
+ * - FIXED: Logika di `handleSetModeLampu` dan (de)serialisasi disesuaikan.
+ * - FIXED: Logika `jalankanModeLampu` disesuaikan untuk membaca dari state per-sisi.
+ * - FIXED: Urutan logika di dalam loop() diubah agar welcome selalu jadi prioritas.
+ * - CONFIG_VERSION dinaikkan ke 26 untuk memaksa reset pengaturan.
  * ===================================================================
  */
 
@@ -116,7 +113,30 @@ const uint8_t numEffects = sizeof(effectRegistry) / sizeof(effectRegistry[0]);
 void runCustomWelcome(WelcomeEffectParams &params);
 
 typedef void (*WelcomeEffectFunction)(WelcomeEffectParams &);
-WelcomeEffectFunction welcomeEffectRegistry[] = {WelcomeEffects::powerOnScan, WelcomeEffects::ignitionBurst, WelcomeEffects::spectrumResolve, WelcomeEffects::theaterChaseWelcome, WelcomeEffects::dualCometWelcome, WelcomeEffects::centerFill, CustomWelcomeEffects::charging, CustomWelcomeEffects::glitch, CustomWelcomeEffects::sonar, CustomWelcomeEffects::burning, CustomWelcomeEffects::warpSpeed, CustomWelcomeEffects::dna, CustomWelcomeEffects::laser, CustomWelcomeEffects::heartbeat, CustomWelcomeEffects::liquid, CustomWelcomeEffects::spotlights, runCustomWelcome};
+WelcomeEffectFunction welcomeEffectRegistry[] = {
+    WelcomeEffects::powerOnScan,
+    WelcomeEffects::ignitionBurst,
+    WelcomeEffects::spectrumResolve,
+    WelcomeEffects::theaterChaseWelcome,
+    WelcomeEffects::dualCometWelcome,
+    WelcomeEffects::centerFill,
+    CustomWelcomeEffects::charging,
+    CustomWelcomeEffects::glitch,
+    CustomWelcomeEffects::sonar,
+    CustomWelcomeEffects::burning,
+    CustomWelcomeEffects::warpSpeed,
+    CustomWelcomeEffects::dna,
+    CustomWelcomeEffects::laser,
+    CustomWelcomeEffects::heartbeat,
+    CustomWelcomeEffects::liquid,
+    CustomWelcomeEffects::spotlights,
+    runCustomWelcome,
+    CustomWelcomeEffects::dynamicGradientSweep,
+    CustomWelcomeEffects::sequentialStartupScan,
+    CustomWelcomeEffects::fluidParticleSwirl,
+    CustomWelcomeEffects::ambientSyncPulse,
+    CustomWelcomeEffects::bioluminescentBreath,
+    CustomWelcomeEffects::rogCyberwave};
 const uint8_t numWelcomeEffects = sizeof(welcomeEffectRegistry) / sizeof(welcomeEffectRegistry[0]);
 
 typedef void (*SeinEffectFunction)(SeinEffectParams &);
@@ -141,7 +161,7 @@ void handleSetModeLampu(AsyncWebServerRequest *request, JsonVariant &json, Light
 void handleSetModeSein(AsyncWebServerRequest *request, JsonVariant &json);
 void handleSetLedCounts(AsyncWebServerRequest *request, JsonVariant &json);
 void handleSetWelcome(AsyncWebServerRequest *request, JsonVariant &json);
-void handlePreviewWelcome(AsyncWebServerRequest *request);
+void handlePreviewWelcome(AsyncWebServerRequest *request, JsonVariant &json); // Diubah untuk menerima JSON
 void handleGetPresetName(AsyncWebServerRequest *request);
 void handleSavePreset(AsyncWebServerRequest *request, JsonVariant &json);
 void handleLoadPreset(AsyncWebServerRequest *request, JsonVariant &json);
@@ -199,6 +219,9 @@ void setup()
                                                                                    { handleSavePreset(request, json); });
   AsyncCallbackJsonWebHandler *loadPresetHandler = new AsyncCallbackJsonWebHandler("/load-preset", [](AsyncWebServerRequest *request, JsonVariant &json)
                                                                                    { handleLoadPreset(request, json); });
+  // Handler baru untuk preview welcome
+  AsyncCallbackJsonWebHandler *previewWelcomeHandler = new AsyncCallbackJsonWebHandler("/preview-welcome", [](AsyncWebServerRequest *request, JsonVariant &json)
+                                                                                       { handlePreviewWelcome(request, json); });
 
   server.addHandler(setAlisHandler);
   server.addHandler(setShroudHandler);
@@ -208,8 +231,8 @@ void setup()
   server.addHandler(setWelcomeHandler);
   server.addHandler(savePresetHandler);
   server.addHandler(loadPresetHandler);
+  server.addHandler(previewWelcomeHandler); // Tambahkan handler baru
 
-  server.on("/preview-welcome", HTTP_POST, handlePreviewWelcome);
   server.on("/get-preset-name", HTTP_GET, handleGetPresetName);
   server.on("/reset-factory", HTTP_POST, handleResetFactory);
 
@@ -242,7 +265,14 @@ void loop()
   bool seinKananNyala = (digitalRead(PIN_INPUT_SEIN_KANAN) == LOW);
   static bool lastSeinState = false;
 
-  if (seinKiriNyala || seinKananNyala)
+  // Prioritas #1: Cek Welcome Animation terlebih dahulu
+  if (isWelcomeActive)
+  {
+    jalankanModeWelcome();
+    lastSeinState = false; // Pastikan state sein direset
+  }
+  // Prioritas #2: Jika welcome tidak aktif, baru cek lampu sein
+  else if (seinKiriNyala || seinKananNyala)
   {
     if (!lastSeinState)
     {
@@ -250,12 +280,21 @@ void loop()
     }
     lastSeinState = true;
 
+    // Jalankan mode normal untuk Shroud dan Demon
     jalankanModeLampu(shroudConfig, shroudConfig.stateKiri, ledsShroudKiri, ledCounts.shroud);
     jalankanModeLampu(shroudConfig, shroudConfig.stateKanan, ledsShroudKanan, ledCounts.shroud);
     jalankanModeLampu(demonConfig, demonConfig.stateKiri, ledsDemonKiri, ledCounts.demon);
     jalankanModeLampu(demonConfig, demonConfig.stateKanan, ledsDemonKanan, ledCounts.demon);
+    // Jalankan mode sein (yang akan mengambil alih strip Alis)
     jalankanModeSein(seinKiriNyala, seinKananNyala);
   }
+  // Prioritas #3: Jika semua di atas tidak aktif, cek master power
+  else if (!masterPowerState)
+  {
+    FastLED.clear();
+    lastSeinState = false;
+  }
+  // Prioritas #4: Kondisi default (jalankan semua mode lampu normal)
   else
   {
     if (lastSeinState)
@@ -264,23 +303,12 @@ void loop()
     }
     lastSeinState = false;
 
-    if (isWelcomeActive)
-    {
-      jalankanModeWelcome();
-    }
-    else if (!masterPowerState)
-    {
-      FastLED.clear();
-    }
-    else
-    {
-      jalankanModeLampu(alisConfig, alisConfig.stateKiri, ledsAlisKiri, ledCounts.alis);
-      jalankanModeLampu(alisConfig, alisConfig.stateKanan, ledsAlisKanan, ledCounts.alis);
-      jalankanModeLampu(shroudConfig, shroudConfig.stateKiri, ledsShroudKiri, ledCounts.shroud);
-      jalankanModeLampu(shroudConfig, shroudConfig.stateKanan, ledsShroudKanan, ledCounts.shroud);
-      jalankanModeLampu(demonConfig, demonConfig.stateKiri, ledsDemonKiri, ledCounts.demon);
-      jalankanModeLampu(demonConfig, demonConfig.stateKanan, ledsDemonKanan, ledCounts.demon);
-    }
+    jalankanModeLampu(alisConfig, alisConfig.stateKiri, ledsAlisKiri, ledCounts.alis);
+    jalankanModeLampu(alisConfig, alisConfig.stateKanan, ledsAlisKanan, ledCounts.alis);
+    jalankanModeLampu(shroudConfig, shroudConfig.stateKiri, ledsShroudKiri, ledCounts.shroud);
+    jalankanModeLampu(shroudConfig, shroudConfig.stateKanan, ledsShroudKanan, ledCounts.shroud);
+    jalankanModeLampu(demonConfig, demonConfig.stateKiri, ledsDemonKiri, ledCounts.demon);
+    jalankanModeLampu(demonConfig, demonConfig.stateKanan, ledsDemonKanan, ledCounts.demon);
   }
 
   FastLED.show();
@@ -290,6 +318,9 @@ void loop()
     broadcastState();
     stateChanged = false;
   }
+
+  // Memberi jeda singkat untuk stabilitas WiFi
+  delay(1);
 }
 
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
@@ -585,8 +616,11 @@ void handleSetLedCounts(AsyncWebServerRequest *request, JsonVariant &json)
   ledCounts.demon = obj["demon"] | ledCounts.demon;
   ledCounts.sein = obj["sein"] | ledCounts.sein;
   simpanPengaturan();
+
+  // KODE BARU: Langsung bersihkan semua LED dan tampilkan perubahannya
   FastLED.clear();
   FastLED.show();
+
   stateChanged = true;
   request->send(200, "text/plain", "OK");
 }
@@ -601,8 +635,14 @@ void handleSetWelcome(AsyncWebServerRequest *request, JsonVariant &json)
   request->send(200, "text/plain", "OK");
 }
 
-void handlePreviewWelcome(AsyncWebServerRequest *request)
+void handlePreviewWelcome(AsyncWebServerRequest *request, JsonVariant &json)
 {
+  JsonObject obj = json.as<JsonObject>();
+
+  // Ambil mode dan durasi dari payload untuk preview, JANGAN DISIMPAN
+  welcomeConfig.mode = obj["mode"] | welcomeConfig.mode;
+  welcomeConfig.durasi = obj["durasi"] | welcomeConfig.durasi;
+
   isWelcomeActive = true;
   welcomeStartTime = 0;
   request->send(200, "text/plain", "OK");
@@ -774,16 +814,12 @@ void jalankanModeLampu(LightConfig &config, LightState &sideState, CRGB *leds, u
     return;
   }
 
-  // Hapus panggilan global FastLED.setBrightness()
-
   uint8_t mapped_speed = map(sideState.kecepatan, 0, 100, 1, 15);
 
   // Kirim tingkat kecerahan sebagai parameter
   EffectParams params = {leds, (uint16_t)ledCount, animStep, mapped_speed, sideState.warna[0], sideState.warna[1], sideState.warna[2], sideState.kecerahan};
 
   effectRegistry[sideState.mode](params);
-
-  // Hapus pemulihan kecerahan original
 }
 
 void jalankanModeSein(bool isKiriActive, bool isKananActive)
@@ -795,8 +831,6 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
     fill_solid(ledsAlisKanan, ledCounts.alis, CRGB::Black);
     return; // Hentikan eksekusi lebih lanjut
   }
-
-  // Hapus penggunaan FastLED.setBrightness() global
 
   if (isKiriActive && seinConfig.mode < numSeinEffects)
   {
@@ -819,8 +853,6 @@ void jalankanModeSein(bool isKiriActive, bool isKananActive)
   {
     fill_solid(ledsAlisKanan, ledCounts.alis, CRGB::Black);
   }
-
-  // Hapus FastLED.setBrightness(originalBrightness)
 }
 
 void jalankanModeWelcome()
@@ -831,7 +863,7 @@ void jalankanModeWelcome()
   uint32_t elapsed = millis() - welcomeStartTime;
   uint32_t duration = welcomeConfig.durasi * 1000;
 
-  if (elapsed > duration && welcomeConfig.mode != (numWelcomeEffects - 1))
+  if (elapsed > duration && welcomeConfig.mode != (numWelcomeEffects - 1)) // Custom welcome handles its own duration
   {
     isWelcomeActive = false;
     welcomeStartTime = 0;
@@ -841,8 +873,43 @@ void jalankanModeWelcome()
   if (welcomeConfig.mode >= numWelcomeEffects)
     return;
 
-  WelcomeEffectParams params = {nullptr, 0, elapsed, duration, alisConfig.stateKiri.warna[0], alisConfig.stateKiri.warna[1], alisConfig.stateKiri.warna[2]};
-  welcomeEffectRegistry[welcomeConfig.mode](params);
+  // Jika ini adalah mode custom, panggil handler khususnya yang sudah bisa menangani semua strip
+  if (welcomeConfig.mode == (numWelcomeEffects - 1))
+  {
+    WelcomeEffectParams p = {nullptr, 0, 0, 0, alisConfig.stateKiri.warna[0], alisConfig.stateKiri.warna[1], alisConfig.stateKiri.warna[2]};
+    runCustomWelcome(p);
+    return;
+  }
+
+  // Jika mode standar, panggil untuk setiap strip
+  WelcomeEffectFunction effect = welcomeEffectRegistry[welcomeConfig.mode];
+
+  // Terapkan ke Alis
+  if (ledCounts.alis > 0)
+  {
+    WelcomeEffectParams alisParams = {ledsAlisKiri, (uint16_t)ledCounts.alis, elapsed, duration, alisConfig.stateKiri.warna[0], alisConfig.stateKiri.warna[1], alisConfig.stateKiri.warna[2]};
+    effect(alisParams);
+    alisParams.leds = ledsAlisKanan;
+    effect(alisParams);
+  }
+
+  // Terapkan ke Shroud
+  if (ledCounts.shroud > 0)
+  {
+    WelcomeEffectParams shroudParams = {ledsShroudKiri, (uint16_t)ledCounts.shroud, elapsed, duration, shroudConfig.stateKiri.warna[0], shroudConfig.stateKiri.warna[1], shroudConfig.stateKiri.warna[2]};
+    effect(shroudParams);
+    shroudParams.leds = ledsShroudKanan;
+    effect(shroudParams);
+  }
+
+  // Terapkan ke Demon
+  if (ledCounts.demon > 0)
+  {
+    WelcomeEffectParams demonParams = {ledsDemonKiri, (uint16_t)ledCounts.demon, elapsed, duration, demonConfig.stateKiri.warna[0], demonConfig.stateKiri.warna[1], demonConfig.stateKiri.warna[2]};
+    effect(demonParams);
+    demonParams.leds = ledsDemonKanan;
+    effect(demonParams);
+  }
 }
 
 void runCustomWelcome(WelcomeEffectParams &params)

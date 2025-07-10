@@ -27,6 +27,14 @@ namespace CustomWelcomeEffects
   void liquid(WelcomeEffectParams &params);
   void spotlights(WelcomeEffectParams &params);
 
+  // --- EFEK BARU DARI GAMBAR ---
+  void dynamicGradientSweep(WelcomeEffectParams &params);
+  void sequentialStartupScan(WelcomeEffectParams &params);
+  void fluidParticleSwirl(WelcomeEffectParams &params);
+  void ambientSyncPulse(WelcomeEffectParams &params);
+  void bioluminescentBreath(WelcomeEffectParams &params);
+  void rogCyberwave(WelcomeEffectParams &params);
+
 }
 
 #endif // CUSTOM_WELCOME_EFFECTS_H
